@@ -48,8 +48,8 @@ def build_ui(sess: DemoSession):
             iy = sess.candidates[0]["index_zyx"][1]
         state["iy"] = iy
         cands = [[k + 1, *[round(v, 1) for v in c["xyz"]], round(c["score"], 1)] for k, c in enumerate(sess.candidates)]
-        return (gr.update(maximum=sess.n_depth - 1, value=iy), sess.coronal_image(iy), cands,
-                f"Loaded {name}: {len(sess.candidates)} candidates. Click a nodule.")
+        return (gr.Slider(minimum=0, maximum=sess.n_depth - 1, value=iy, step=1, label="DTS depth slice (y)"),
+                sess.coronal_image(iy), cands, f"Loaded {name}: {len(sess.candidates)} candidates. Click a nodule.")
 
     def on_slider(iy):
         state["iy"] = int(iy)
@@ -110,6 +110,8 @@ def build_ui(sess: DemoSession):
         depth.change(on_slider, [depth], [img, status])
         img.select(on_click, None, [report, panel, plot3d])
         fu_btn.click(on_followup, [days, dt], [fu])
+    demo.medlift_handlers = {"on_case": on_case, "on_slider": on_slider, "on_click": on_click,
+                             "on_followup": on_followup, "state": state}
     return demo
 
 
@@ -144,9 +146,21 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
         ck.check("virtual follow-up -> VDT/MDT", False, str(e))
     try:
         import gradio  # noqa: F401
+        from types import SimpleNamespace
 
-        build_ui(sess)
+        ui = build_ui(sess)
         ck.check("Gradio UI builds", True, gradio.__version__)
+        h = ui.medlift_handlers
+        out = h["on_case"](cases[0])
+        ck.check("UI: select case -> slice + candidates", out[1].ndim == 3, f"{len(out[2])} candidates")
+        iy = int(round(sess.ctx.coarse_vg.world_to_index(np.asarray(nod.center_xyz))[1]))
+        h["on_slider"](iy)
+        vg = sess.ctx.coarse_vg
+        ix, _, iz = np.round(vg.world_to_index(np.asarray(nod.center_xyz))).astype(int)
+        row = (vg.shape[0] - 1) - iz
+        md, path, fig = h["on_click"](SimpleNamespace(index=[int(ix), int(row)]))
+        ck.check("UI: click on the nodule -> report + panel + 3D plot", "Mass" in md and os.path.exists(path), path)
+        ck.check("UI: follow-up button", "doubling" in h["on_followup"](180, 300), "")
     except ImportError:
         ck.info("Gradio UI", "gradio not installed (pip install gradio plotly) -- backend verified only")
     os.makedirs(out_dir, exist_ok=True)

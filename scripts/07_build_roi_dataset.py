@@ -91,15 +91,16 @@ def main():
         for p in lung_points(case, rng, args.negatives, [n.center_xyz for n in case.nodules]):
             centers.append(("negative", -1, p))
         for i, (kind, j, c) in enumerate(centers):
-            roi = ROI.from_config(c, cfg["roi"])
+            roi = ROI.from_config(c, cfg["roi"], geom)
             prob = ROIProblem(roi, geom, noisy, cmu, cvg, step_mm=cfg["roi"]["step_mm"],
                               coarse_step_mm=cfg["sirt"]["step_mm"], margin_px=cfg["roi"]["margin_px"],
-                              device=dev, mu_water=mu_w)
+                              device=dev, mu_water=mu_w, min_ray_fraction=float(cfg["roi"]["min_ray_fraction"]))
             mu, _ = prob.sirt(n_iter=int(cfg["roi"]["sirt_iter"]), init_hu=float(cfg["roi"]["lung_hu"]))
             cond = mu_to_hu(mu.cpu().numpy(), mu_w)
             target = resample_to_grid(case.hu, case.vgeom, roi.vgeom, order=1)
+            cidx = roi.vgeom.world_to_index(np.asarray(c, float))[::-1]          # (iz, iy, ix) in the prism
             save_pair(paths.p("roi_pairs", split, f"{cid}_{i:03d}.npz"), cond, target, case_id=cid, kind=kind,
-                      nodule=j, center=c)
+                      nodule=j, center=c, center_idx=cidx)
             counts[split] += 1
             ps_c.append(psnr(np.clip(cond, -1000, 400), np.clip(target, -1000, 400), 1400.0))
             if len(previews) < 4 and kind == "nodule":

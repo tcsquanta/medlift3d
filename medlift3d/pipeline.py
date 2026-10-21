@@ -199,7 +199,7 @@ def ground_truth_for_roi(case: Case, nodule_index: int, roi: ROI, mcfg: dict) ->
     gt_meas = measure_ground_truth(crop_hu, crop_vg, crop_mask, mcfg)
     gt_roi = resample_to_grid(case.hu, case.vgeom, roi.vgeom, order=1)
     gt_mask_roi = resample_mask(full, case.vgeom, roi.vgeom)
-    out = {"meas": gt_meas, "roi_hu": gt_roi, "roi_mask": gt_mask_roi}
+    out = {"meas": gt_meas, "roi_hu": gt_roi, "roi_mask": gt_mask_roi, "roi_vg": roi.vgeom}
     if nod.reader_masks is not None and len(nod.reader_masks) > 1:
         vols = [float(m.sum()) * case.vgeom.voxel_volume for m in nod.reader_masks]
         out["meas"]["reader_volume_cv"] = float(np.std(vols) / max(np.mean(vols), 1e-9))
@@ -223,6 +223,11 @@ def process_nodule(ctx: CaseContext, click_xyz, cfg: dict, model=None, diffusion
     roi = prob.roi
     vg = roi.vgeom
     sl = roi.box_slices()
+    if gt is not None and "roi_vg" in gt:
+        gvg = gt["roi_vg"]
+        if gvg.shape != vg.shape or not np.allclose(gvg.origin, vg.origin, atol=1e-3):
+            raise ValueError("ground truth ROI grid does not match the reconstruction grid: build it with "
+                             "ROI.from_config(click, cfg['roi'], geom) using the same click and geometry")
     t0 = time.perf_counter()
     sirt_mu, sirt_hist = prob.sirt(n_iter=int(rcfg["sirt_iter"]), init_hu=float(rcfg["lung_hu"]))
     roi_sirt_hu = mu_to_hu(sirt_mu.cpu().numpy(), mu_w)

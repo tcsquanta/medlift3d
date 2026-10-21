@@ -116,7 +116,7 @@ def main():
             pick = [p for p in pick if (cid, j, p[0], p[1]) not in done]
             if not pick:
                 continue
-            roi = ROI.from_config(nod.center_xyz, cfg["roi"])
+            roi = ROI.from_config(nod.center_xyz, cfg["roi"], geom)
             gt_b = ground_truth_for_roi(case, j, roi, cfg["measure"])
             res_b = process_nodule(ctx_b, nod.center_xyz, cfg, model, diffusion, methods, args.members,
                                    seed=stable_seed(cid, j), gt=gt_b)

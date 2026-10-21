@@ -71,7 +71,7 @@ def main():
             if args.limit and n_done >= args.limit:
                 break
             nod = case.nodules[j]
-            roi = ROI.from_config(nod.center_xyz, cfg["roi"])
+            roi = ROI.from_config(nod.center_xyz, cfg["roi"], geom)
             try:
                 gt = ground_truth_for_roi(case, j, roi, cfg["measure"])
                 keep = figs < args.figures

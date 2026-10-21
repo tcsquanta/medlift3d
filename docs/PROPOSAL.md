@@ -43,7 +43,8 @@ Any of these can come out false. The report must state whichever results we actu
 
 1. **Data:** LIDC-IDRI CT (TCIA) + radiologist annotations via `pylidc` (consensus mask
    = >= 50% of the 4 readers). Nodules 4-30 mm marked by >= 3 readers, slice thickness <= 2.5 mm.
-2. **DTS simulation (virtual clinical trial):** 15 views, +-15 deg linear sweep, SID 1800 mm,
+2. **DTS simulation (virtual clinical trial):** the CT table is removed (largest body component),
+   then 15 views, +-15 deg linear sweep, SID 1800 mm,
    43 cm flat panel (0.8 mm pixels), monochromatic attenuation, Poisson noise (I0 = 2e4/pixel).
    Simulated at CT resolution with fine ray sampling; reconstructed on different grids (no inverse crime).
 3. **Standard DTS reconstruction:** coarse whole-chest SIRT (2.5 mm). The doctor scrolls coronal slices;

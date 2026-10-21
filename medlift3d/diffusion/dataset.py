@@ -18,7 +18,11 @@ from .ddpm import hu_to_unit
 
 
 class RoiPairDataset(Dataset):
-    def __init__(self, root_or_files, augment: bool = True, max_items: Optional[int] = None):
+    """Returns (cond, target) unit-scaled tensors [1,D,H,W]; with return_meta=True also the
+    nodule-centre index (iz, iy, ix) in the prism (-1s if unknown)."""
+
+    def __init__(self, root_or_files, augment: bool = True, max_items: Optional[int] = None,
+                 return_meta: bool = False):
         if isinstance(root_or_files, (list, tuple)):
             files = list(root_or_files)
         else:
@@ -29,6 +33,7 @@ class RoiPairDataset(Dataset):
             raise FileNotFoundError(f"no ROI pairs found in {root_or_files}")
         self.files = files
         self.augment = augment
+        self.return_meta = return_meta
 
     def __len__(self) -> int:
         return len(self.files)
@@ -42,8 +47,12 @@ class RoiPairDataset(Dataset):
                 if np.random.rand() < 0.5:
                     cond = np.flip(cond, ax)
                     tgt = np.flip(tgt, ax)
-        return (torch.from_numpy(np.ascontiguousarray(cond))[None],
-                torch.from_numpy(np.ascontiguousarray(tgt))[None])
+        out = (torch.from_numpy(np.ascontiguousarray(cond))[None],
+               torch.from_numpy(np.ascontiguousarray(tgt))[None])
+        if self.return_meta:
+            cidx = z["center_idx"].astype(float) if "center_idx" in z else np.full(3, -1.0)
+            return out + (cidx,)
+        return out
 
 
 def save_pair(path: str, cond_hu: np.ndarray, target_hu: np.ndarray, **meta) -> None:

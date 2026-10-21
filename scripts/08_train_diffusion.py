@@ -69,22 +69,37 @@ class TinyDataset(torch.utils.data.Dataset):
         return self.items[i]
 
 
+def _box(arr, cidx, half_vox):
+    if cidx is None or np.any(np.asarray(cidx) < 0):
+        return arr
+    lo = [max(0, int(round(c - h))) for c, h in zip(cidx, half_vox)]
+    hi = [min(n, int(round(c + h)) + 1) for c, n, h in zip(cidx, arr.shape, half_vox)]
+    return arr[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]]
+
+
 @torch.no_grad()
-def evaluate(model, diffusion, val_items, steps, device, gen_seed=0, start_frac=1.0):
+def evaluate(model, diffusion, val_items, steps, device, gen_seed=0, start_frac=1.0, box_half_vox=None):
+    """Mean PSNR of samples and of the condition vs CT: whole prism and nodule box."""
     model.eval()
-    ps_s, ps_c, vis = [], [], []
+    ps_s, ps_c, bx_s, bx_c, vis = [], [], [], [], []
     g = torch.Generator(device=device).manual_seed(gen_seed)
-    for cond, tgt in val_items:
+    for item in val_items:
+        cond, tgt = item[0], item[1]
+        cidx = item[2] if len(item) > 2 else None
         c = cond[None].to(device)
         x = diffusion.ddim_sample(model, c, steps=steps, eta=0.0, generator=g, start_frac=start_frac)
-        s_hu = unit_to_hu(x[0, 0]).float().cpu().numpy()
-        c_hu = unit_to_hu(cond[0]).numpy()
-        t_hu = unit_to_hu(tgt[0]).numpy()
-        ps_s.append(psnr(np.clip(s_hu, -1000, 400), np.clip(t_hu, -1000, 400), 1400.0))
-        ps_c.append(psnr(np.clip(c_hu, -1000, 400), np.clip(t_hu, -1000, 400), 1400.0))
+        s_hu = np.clip(unit_to_hu(x[0, 0]).float().cpu().numpy(), -1000, 400)
+        c_hu = np.clip(unit_to_hu(cond[0]).numpy(), -1000, 400)
+        t_hu = np.clip(unit_to_hu(tgt[0]).numpy(), -1000, 400)
+        ps_s.append(psnr(s_hu, t_hu, 1400.0))
+        ps_c.append(psnr(c_hu, t_hu, 1400.0))
+        if box_half_vox is not None:
+            bx_s.append(psnr(_box(s_hu, cidx, box_half_vox), _box(t_hu, cidx, box_half_vox), 1400.0))
+            bx_c.append(psnr(_box(c_hu, cidx, box_half_vox), _box(t_hu, cidx, box_half_vox), 1400.0))
         vis.append((c_hu, s_hu, t_hu))
     model.train()
-    return float(np.mean(ps_s)), float(np.mean(ps_c)), vis
+    box = (float(np.mean(bx_s)), float(np.mean(bx_c))) if bx_s else (float("nan"), float("nan"))
+    return float(np.mean(ps_s)), float(np.mean(ps_c)), vis, box
 
 
 def main():
@@ -122,7 +137,7 @@ def main():
         train_ds = RoiPairDataset(os.path.join(cfg["paths"]["work"], "roi_pairs", "train"), augment=True)
         vdir = os.path.join(cfg["paths"]["work"], "roi_pairs", "val")
         val_ds = RoiPairDataset(vdir, augment=False) if os.path.isdir(vdir) and os.listdir(vdir) else None
-        src = val_ds if val_ds is not None else RoiPairDataset(train_ds.files, augment=False)
+        src = RoiPairDataset(val_ds.files if val_ds is not None else train_ds.files, augment=False, return_meta=True)
         idx = np.linspace(0, len(src) - 1, min(args.n_val, len(src))).astype(int)
         val_items = [src[i] for i in idx]
         sample_steps = int(dcfg["sample_steps"])
@@ -161,7 +176,9 @@ def main():
     if new_log:
         logw.writerow(["step", "loss", "lr", "sec_per_step", "val_psnr_sample", "val_psnr_condition"])
     warmup = float(max(1, min(500, steps // 10)))
-    losses, hist_s, hist_c = [], [], []
+    losses, hist_s, hist_c, hist_bs, hist_bc = [], [], [], [], []
+    vsp = np.asarray(cfg["roi"]["voxel_mm"], float)[::-1]                              # (z, y, x)
+    box_half = None if args.tiny else (np.asarray(cfg["roi"].get("box_mm", (40, 50, 40)), float)[::-1] / vsp / 2.0)
     best = -1e9
     t_last = time.perf_counter()
     model.train()
@@ -191,13 +208,16 @@ def main():
             logw.writerow([step, ml, cur_lr, dt, "", ""])
             logf.flush()
         if step % args.sample_every == 0 or step == steps:
-            ps, pc, vis = evaluate(ema.shadow, diffusion, val_items, sample_steps, dev,
-                                   start_frac=float(dcfg.get("start_frac", 1.0)))
+            ps, pc, vis, (bs, bc) = evaluate(ema.shadow, diffusion, val_items, sample_steps, dev,
+                                             start_frac=float(dcfg.get("start_frac", 1.0)), box_half_vox=box_half)
             hist_s.append(ps)
             hist_c.append(pc)
+            hist_bs.append(bs)
+            hist_bc.append(bc)
             logw.writerow([step, "", "", "", ps, pc])
             logf.flush()
-            print(f"  [val] PSNR sample vs CT {ps:.2f} dB | condition vs CT {pc:.2f} dB")
+            print(f"  [val] PSNR sample vs CT {ps:.2f} dB | condition vs CT {pc:.2f} dB"
+                  + (f"  || nodule box: sample {bs:.2f} dB | condition {bc:.2f} dB" if np.isfinite(bs) else ""))
             c_hu, s_hu, t_hu = vis[0]
             from medlift3d.geometry import VolumeGeometry
 
@@ -217,8 +237,13 @@ def main():
     first, last = float(np.mean(losses[:k])), float(np.mean(losses[-k:]))
     ck.check("training loss decreased (last 10% / first 10%)", last < 0.7 * first, f"{first:.4f} -> {last:.4f}", "< 0.7")
     if hist_s:
-        ck.check("diffusion samples beat the physics-only condition on validation ROIs (PSNR)",
-                 hist_s[-1] > hist_c[-1], f"{hist_s[-1]:.2f} dB vs {hist_c[-1]:.2f} dB")
+        if hist_bs and np.isfinite(hist_bs[-1]):
+            ck.check("diffusion samples beat the physics-only condition in the nodule box (PSNR)",
+                     hist_bs[-1] > hist_bc[-1], f"{hist_bs[-1]:.2f} dB vs {hist_bc[-1]:.2f} dB")
+            ck.info("   whole prism (incl. chest walls) PSNR sample / condition", f"{hist_s[-1]:.2f} / {hist_c[-1]:.2f} dB")
+        else:
+            ck.check("diffusion samples beat the physics-only condition on validation ROIs (PSNR)",
+                     hist_s[-1] > hist_c[-1], f"{hist_s[-1]:.2f} dB vs {hist_c[-1]:.2f} dB")
     ck.info("checkpoints", mdir)
     ck.finish(out)
 
