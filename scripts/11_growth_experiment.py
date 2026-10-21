@@ -49,7 +49,7 @@ def grow_case(case, j, scale, mcfg):
     cmask = full[sl]
     cvg = VolumeGeometry(crop.shape, case.vgeom.spacing, tuple(case.vgeom.index_to_world(lo[::-1].astype(float))))
     base = measure_ground_truth(crop, cvg, cmask, mcfg)["baseline_hu"]
-    grown, gmask = virtual_growth(crop, cvg, cmask, scale, base)
+    grown, gmask, ginfo = virtual_growth(crop, cvg, cmask, scale, base, return_info=True)
     dmu = hu_to_mu(grown, 0.02) - hu_to_mu(crop, 0.02)
     case_f = copy.copy(case)
     case_f.hu = case.hu.copy()
@@ -61,6 +61,7 @@ def grow_case(case, j, scale, mcfg):
     nf.center_xyz = list(nod.center_xyz)
     case_f.nodules = list(case.nodules)
     case_f.nodules[j] = nf
+    case_f.meta = dict(case.meta, growth=ginfo)
     return case_f, cvg, dmu
 
 
@@ -135,7 +136,9 @@ def main():
                 g_ratio = gt_f["meas"]["volume_mm3"] / gt_b["meas"]["volume_mm3"]
                 m_ratio = gt_f["meas"]["mass_mg"] / max(gt_b["meas"]["mass_mg"], 1e-6)
                 if s > 1.0:                                       # stable pairs are trivially exact
-                    gt_ratio_err.append((abs(m_ratio / s ** 3 - 1), abs(g_ratio / s ** 3 - 1)))
+                    gi = case_f.meta["growth"]
+                    construct = abs(gi["added_mass_mg"] / ((s ** 3 - 1) * gi["excess_mass_mg"]) - 1)
+                    gt_ratio_err.append((construct, abs(m_ratio / s ** 3 - 1), abs(g_ratio / s ** 3 - 1)))
                 row = {"case_id": cid, "nodule_index": j, "diameter_mm": nod.diameter_mm, "interval_days": dt,
                        "true_dt_days": DT, "scale": s, "gt_volume_ratio": g_ratio,
                        "gt_mass_ratio": gt_f["meas"]["mass_mg"] / max(gt_b["meas"]["mass_mg"], 1e-6),
@@ -163,10 +166,11 @@ def main():
     ck.check("growth pairs available", len(rows) > 0, len(rows))
     if gt_ratio_err:
         ge = np.array(gt_ratio_err)
-        ck.check("virtual growth on CT: |GT mass ratio / s^3 - 1| (median)", np.median(ge[:, 0]) < 0.1,
-                 f"{100 * np.median(ge[:, 0]):.1f}%", "< 10%")
-        ck.info("   GT voxel-volume ratio vs s^3 (median abs dev; discretisation of small masks)",
+        ck.check("virtual growth construction: added mass = (s^3-1) x nodule mass (max deviation)",
+                 np.max(ge[:, 0]) < 0.03, f"{100 * np.max(ge[:, 0]):.1f}%", "< 3%")
+        ck.info("   GT measured mass ratio vs s^3 (median abs dev; includes nearby vessels in the region)",
                 f"{100 * np.median(ge[:, 1]):.1f}%")
+        ck.info("   GT voxel-volume ratio vs s^3 (median abs dev; mask discretisation)", f"{100 * np.median(ge[:, 2]):.1f}%")
     if not rows:
         ck.finish(out)
         return

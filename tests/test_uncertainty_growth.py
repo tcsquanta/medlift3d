@@ -79,3 +79,19 @@ def test_virtual_growth_scales_volume_and_mass():
     m_ratio = (new - lung).clip(0).sum() / (vol - lung).clip(0).sum()
     assert abs(v_ratio - s ** 3) / s ** 3 < 0.08, v_ratio
     assert abs(m_ratio - s ** 3) / s ** 3 < 0.08, m_ratio
+
+
+def test_virtual_growth_exact_on_thick_slices():
+    """Coarse (0.7 x 0.7 x 2.5 mm) CT grid: added mass is still (s^3 - 1) x nodule mass."""
+    from medlift3d.geometry import VolumeGeometry
+
+    vg = VolumeGeometry.centered((20, 40, 40), (0.7, 0.7, 2.5))
+    x, y, z = vg.axes()
+    Z, Y, X = np.meshgrid(z, y, x, indexing="ij")
+    r = np.sqrt(X ** 2 + Y ** 2 + Z ** 2)
+    hu = (-850 + 870 / (1 + np.exp((r - 4.0) / 0.4))).astype(np.float32)
+    mask = r <= 4.0
+    s = 1.149
+    new, gmask, info = virtual_growth(hu, vg, mask, s, -850.0, return_info=True)
+    assert abs(info["added_mass_mg"] / ((s ** 3 - 1) * info["excess_mass_mg"]) - 1) < 0.03
+    assert abs(gmask.sum() / mask.sum() - s ** 3) / s ** 3 < 0.2
