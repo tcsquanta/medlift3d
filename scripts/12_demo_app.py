@@ -29,7 +29,7 @@ def build_ui(sess: DemoSession):
     def fig3d():
         m = sess.mesh()
         if m is None:
-            return go.Figure()
+            return go.Figure().update_layout(title="no nodule surface (nothing segmented at the click)")
         xyz, faces, col = m
         f = go.Figure(go.Mesh3d(x=xyz[:, 0], y=xyz[:, 1], z=xyz[:, 2], i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
                                 intensity=col, colorscale="RdYlGn_r", colorbar=dict(title="std (HU)"), opacity=1.0))
@@ -60,10 +60,11 @@ def build_ui(sess: DemoSession):
         xyz = sess.pixel_to_world(int(row), int(col), state["iy"])
         rep = sess.analyze(xyz)
         res = sess.last["res"]
-        e = res["methods"][sess.method]
-        vols = {"DTS ROI-SIRT (input)": res["roi_sirt_hu"], f"{sess.method} (mean)": e["mean_volume"]}
-        masks = {f"{sess.method} (mean)": e["vote_mask"]}
-        stds = {f"{sess.method} (mean)": e["std_volume"]} if e.get("std_volume") is not None else None
+        meth = rep["method"]
+        e = res["methods"][meth]
+        vols = {"DTS ROI-SIRT (input)": res["roi_sirt_hu"], f"{meth} (mean)": e["mean_volume"]}
+        masks = {f"{meth} (mean)": e["vote_mask"]}
+        stds = {f"{meth} (mean)": e["std_volume"]} if e.get("std_volume") is not None else None
         import os
         path = viz.save_roi_panel(os.path.join(sess.cfg["paths"]["outputs"], "12_demo", "last_roi.png"), vols, res["roi_vg"], xyz, masks, stds,
                                   "coronal = what DTS shows, sagittal = depth (where DTS is blind)")
@@ -72,7 +73,8 @@ def build_ui(sess: DemoSession):
               f"- **Volume:** {rep['volume_mm3']:.0f} mm3  [{rep['volume_interval'][0]:.0f} - {rep['volume_interval'][1]:.0f}]\n"
               f"- 2D diameter on the DTS slice: {rep['d2d_long_mm']:.1f} mm\n"
               f"- EUPS volume category: {rep['eups_category']}\n"
-              f"- method: {rep['method']}, {rep['n_members']} hypotheses, {rep['seconds']:.1f} s\n\n"
+              f"- method: {rep['method']}, {rep['n_members']} hypotheses, {rep['seconds']:.1f} s\n"
+              + (f"- **note:** {rep['note']}\n" if rep["note"] else "") + "\n"
               "_Mass is measured directly by every X-ray view; volume needs the depth extent, which DTS cannot see -- "
               "hence its wider interval._")
         return md, path, fig3d()
@@ -136,6 +138,7 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
     ck.check("analysis report finite", np.isfinite(rep["volume_mm3"]) and np.isfinite(rep["mass_mg"]),
              f"V {rep['volume_mm3']:.0f} mm3 [{rep['volume_interval'][0]:.0f}-{rep['volume_interval'][1]:.0f}], "
              f"M {rep['mass_mg']:.0f} mg [{rep['mass_interval'][0]:.0f}-{rep['mass_interval'][1]:.0f}] ({rep['interval_type']})")
+    ck.info("method used", rep["method"] + (f" ({rep['note']})" if rep["note"] else ""))
     m = sess.mesh()
     ck.check("3D surface mesh", m is not None and len(m[1]) > 0, f"{0 if m is None else len(m[1])} faces")
     try:
@@ -164,10 +167,10 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
     except ImportError:
         ck.info("Gradio UI", "gradio not installed (pip install gradio plotly) -- backend verified only")
     os.makedirs(out_dir, exist_ok=True)
-    res = sess.last["res"]
-    e = res["methods"][sess.method]
-    viz.save_roi_panel(os.path.join(out_dir, "selftest_roi.png"), {"input": res["roi_sirt_hu"], sess.method: e["mean_volume"]},
-                       res["roi_vg"], nod.center_xyz, {sess.method: e["vote_mask"]}, None, "demo self-test")
+    res, meth = sess.last["res"], sess.last["method"]
+    e = res["methods"][meth]
+    viz.save_roi_panel(os.path.join(out_dir, "selftest_roi.png"), {"input": res["roi_sirt_hu"], meth: e["mean_volume"]},
+                       res["roi_vg"], nod.center_xyz, {meth: e["vote_mask"]}, None, "demo self-test")
     return ck.finish(out_dir)
 
 

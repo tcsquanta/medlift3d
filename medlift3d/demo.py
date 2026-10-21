@@ -114,30 +114,43 @@ class DemoSession:
         return [float(v) for v in vg.index_to_world(np.array([col, iy, iz], float))]
 
     # ---------------------------------------------------------------- analysis
-    def _interval(self, value: float, sigma: float, qty: str):
-        key = f"{self.method}:{qty}"
-        if key in self.calib:
-            c = self.calib[key]
+    def _interval(self, value: float, sigma: float, qty: str, method: str):
+        key = f"{method}:{qty}"
+        c = self.calib.get(key)
+        if c is not None and all(c.get(q) is not None and np.isfinite(c[q]) for q in ("q_lo", "q_hi")):
             cal = ConformalCalibrator(alpha=c["alpha"], mode=c["mode"], sigma_floor=c["sigma_floor"],
                                       q_lo=c["q_lo"], q_hi=c["q_hi"], n_cal=c["n_cal"])
             lo, hi = cal.interval([value], [sigma])
             return float(lo[0]), float(hi[0]), f"calibrated {int(100 * (1 - c['alpha']))}%"
-        return float(value * np.exp(-2 * sigma)), float(value * np.exp(2 * sigma)), "uncalibrated +-2 sd"
+        how = "uncalibrated +-2 sd" + (" (too few calibration nodules)" if c is not None else "")
+        return float(value * np.exp(-2 * sigma)), float(value * np.exp(2 * sigma)), how
 
     def analyze(self, click_xyz, n_members: Optional[int] = None) -> Dict:
-        methods = [self.method]
-        res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, methods, n_members,
-                             seed=stable_seed(self.ctx.case_id, *[round(c) for c in click_xyz]), keep_volumes=True)
-        e = res["methods"][self.method]
-        v_lo, v_hi, how = self._interval(e["volume_mm3"], e["volume_log_std"], "volume")
-        m_lo, m_hi, _ = self._interval(e["mass_mg"], e["mass_log_std"], "mass")
-        report = {"method": self.method, "click_xyz": click_xyz, "volume_mm3": e["volume_mm3"],
+        """Reconstruct + measure at the click. If the main method finds no nodule there, the
+        physics-only method (roi_gs) is tried and the report says so in ``note``."""
+        seed = stable_seed(self.ctx.case_id, *[round(c) for c in click_xyz])
+        method, note = self.method, ""
+        res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
+                             seed=seed, keep_volumes=True)
+        secs = res["timing_s"]["total"]
+        if res["methods"][method]["volume_mm3"] <= 0 and method != "roi_gs":
+            note = f"{method} found no nodule at the click; showing the physics-only result (roi_gs)"
+            method = "roi_gs"
+            res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
+                                 seed=seed, keep_volumes=True)
+            secs += res["timing_s"]["total"]
+        e = res["methods"][method]
+        if e["volume_mm3"] <= 0:
+            note = "no nodule found at the click (contrast too low or not a nodule)"
+        v_lo, v_hi, how = self._interval(e["volume_mm3"], e["volume_log_std"], "volume", method)
+        m_lo, m_hi, _ = self._interval(e["mass_mg"], e["mass_log_std"], "mass", method)
+        report = {"method": method, "note": note, "click_xyz": click_xyz, "volume_mm3": e["volume_mm3"],
                   "volume_interval": [v_lo, v_hi], "mass_mg": e["mass_mg"], "mass_interval": [m_lo, m_hi],
                   "interval_type": how, "d2d_long_mm": e["d2d_long_mm"],
                   "volume_fine_mm3": e.get("volume_fine_mm3"), "mass_gauss_mg": e.get("mass_gauss_mg"),
                   "eups_category": eups_volume_category(e["volume_mm3"]), "n_members": e["n_members"],
-                  "seconds": res["timing_s"]["total"]}
-        self.last = {"res": res, "entry": e, "report": report, "click": list(click_xyz)}
+                  "seconds": secs}
+        self.last = {"res": res, "entry": e, "report": report, "click": list(click_xyz), "method": method}
         return report
 
     def nearest_nodule(self, click_xyz, max_mm: float = 15.0) -> Optional[int]:
@@ -176,9 +189,10 @@ class DemoSession:
         cmu_f, _, _ = coarse_sirt(noisy_f, self.ctx.geom, self.case.vgeom, self.cfg["sirt"], device=self.device,
                                   x0=self.ctx.coarse_mu, n_iter=10)
         ctx_f = CaseContext(self.ctx.case_id, self.ctx.geom, noisy_f, cmu_f, self.ctx.coarse_vg, self.ctx.mu_water, self.device)
-        res_f = process_nodule(ctx_f, self.last["click"], self.cfg, self.model, self.diffusion, [self.method],
+        method = self.last["method"]                                  # same method as the baseline scan
+        res_f = process_nodule(ctx_f, self.last["click"], self.cfg, self.model, self.diffusion, [method],
                                seed=stable_seed(self.ctx.case_id, "fu"))
-        eb, ef = self.last["entry"], res_f["methods"][self.method]
+        eb, ef = self.last["entry"], res_f["methods"][method]
         vdt = doubling_time(eb["volume_mm3"], ef["volume_mm3"], interval_days)
         mdt = doubling_time(eb["mass_mg"], ef["mass_mg"], interval_days)
         true_dt = doubling_days if doubling_days < 1e8 else float("inf")
@@ -194,7 +208,7 @@ class DemoSession:
         if self.last is None:
             return None
         res = self.last["res"]
-        e = res["methods"][self.method]
+        e = res["methods"][self.last["method"]]
         vg = res["roi_vg"]
         mask = e["vote_mask"].astype(np.float32)
         if mask.sum() < 4:
