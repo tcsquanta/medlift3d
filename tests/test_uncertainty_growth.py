@@ -1,0 +1,81 @@
+"""Conformal coverage, sparsification, doubling times and virtual growth."""
+import math
+
+import numpy as np
+
+from medlift3d.growth import (FAST, INDET, SLOW, doubling_time, growth_category, scale_for_doubling,
+                              virtual_growth)
+from medlift3d.phantom import sphere_volume
+from medlift3d.uncertainty import ConformalCalibrator, coverage, relative_width, sparsification
+
+
+def _synthetic(n, rng, bias=0.0):
+    truth = np.exp(rng.uniform(3, 7, n))
+    sigma = rng.uniform(0.05, 0.4, n)                      # per-item predicted log-std
+    err = bias + sigma * rng.standard_normal(n) * 1.5      # true errors scale with sigma (miscalibrated x1.5)
+    pred = truth * np.exp(-err)
+    return pred, sigma, truth
+
+
+def test_conformal_coverage_both_modes():
+    rng = np.random.default_rng(0)
+    for mode in ("symmetric", "asymmetric"):
+        covs = []
+        for rep in range(20):
+            pc, sc, tc = _synthetic(150, rng, bias=0.3)
+            pt, st, tt = _synthetic(1000, rng, bias=0.3)
+            cal = ConformalCalibrator(alpha=0.1, mode=mode).fit(pc, sc, tc)
+            lo, hi = cal.interval(pt, st)
+            covs.append(coverage(lo, hi, tt))
+        assert 0.87 <= np.mean(covs) <= 0.95, (mode, np.mean(covs))
+
+
+def test_asymmetric_is_narrower_under_bias():
+    """With a systematic bias, asymmetric intervals shift instead of widening (log-width)."""
+    rng = np.random.default_rng(1)
+
+    def data(n):
+        truth = np.exp(rng.uniform(3, 7, n))
+        sigma = np.full(n, 0.2)
+        pred = truth * np.exp(-(0.5 + 0.2 * rng.standard_normal(n)))     # biased by exp(-0.5)
+        return pred, sigma, truth
+    pc, sc, tc = data(400)
+    pt, st, tt = data(2000)
+    w, cov = {}, {}
+    for mode in ("symmetric", "asymmetric"):
+        cal = ConformalCalibrator(alpha=0.1, mode=mode).fit(pc, sc, tc)
+        lo, hi = cal.interval(pt, st)
+        w[mode] = float(np.median(np.log(hi / lo)))
+        cov[mode] = coverage(lo, hi, tt)
+    assert w["asymmetric"] < 0.75 * w["symmetric"], w
+    assert min(cov.values()) > 0.85, cov
+
+
+def test_sparsification_oracle_vs_random():
+    rng = np.random.default_rng(2)
+    err = rng.standard_normal(5000)
+    good = sparsification(err, np.abs(err))
+    bad = sparsification(err, rng.random(5000))
+    assert good["ause"] < 0.02 and bad["ause"] > good["ause"] + 0.1
+
+
+def test_doubling_time_and_categories():
+    assert abs(doubling_time(100.0, 200.0, 365.0) - 365.0) < 1e-9
+    assert doubling_time(100.0, 90.0, 365.0) == float("inf")
+    assert growth_category(200) == FAST and growth_category(500) == INDET and growth_category(900) == SLOW
+    s = scale_for_doubling(180.0, 300.0)
+    assert abs(s ** 3 - 2 ** (180.0 / 300.0)) < 1e-9
+
+
+def test_virtual_growth_scales_volume_and_mass():
+    r, hu, lung = 5.0, 20.0, -850.0
+    vol, vg = sphere_volume(hu, r, spacing=0.5, size_mm=48.0, background_hu=lung)
+    x, y, z = vg.axes()
+    Z, Y, X = np.meshgrid(z, y, x, indexing="ij")
+    mask = X ** 2 + Y ** 2 + Z ** 2 <= r * r
+    s = 1.3
+    new, gmask = virtual_growth(vol, vg, mask, s, lung)
+    v_ratio = gmask.sum() / mask.sum()
+    m_ratio = (new - lung).clip(0).sum() / (vol - lung).clip(0).sum()
+    assert abs(v_ratio - s ** 3) / s ** 3 < 0.08, v_ratio
+    assert abs(m_ratio - s ** 3) / s ** 3 < 0.08, m_ratio

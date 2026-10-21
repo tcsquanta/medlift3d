@@ -1,0 +1,61 @@
+# MedLift-3D default configuration (real LIDC-IDRI runs on a GPU).
+# Every key has a default in medlift3d/config.py; this file only overrides.
+seed: 42
+
+paths:
+  lidc_root: data/LIDC-IDRI        # DICOM root (step 3 downloads here)
+  work: work                       # intermediate files
+  outputs: outputs                 # verification figures / tables
+
+physics:
+  mu_water: 0.02                   # mm^-1 (~60-70 keV)
+
+geometry:                          # chest DTS: 15 views over 30 deg, 1800 mm SID, 43 cm detector
+  n_views: 15
+  sweep_deg: 30.0
+  sid: 1800.0
+  det_shape: [536, 536]
+  det_pitch: [0.8, 0.8]
+
+simulation:
+  i0: 20000                        # photons / pixel / view (low dose); try 5000-100000
+  step_mm: 0.5
+
+sirt:                              # coarse whole-chest DTS reconstruction
+  voxel_mm: [2.5, 2.5, 2.5]
+  det_binning: 3
+  n_iter: 40
+  step_mm: 1.25
+
+roi:                               # prism: 64 x 256 x 64 mm column through the chest at the click
+  size_vox: [64, 128, 64]
+  voxel_mm: [1.0, 2.0, 1.0]
+  box_mm: [40.0, 50.0, 40.0]       # nodule box for the 3D Gaussians
+  min_ray_fraction: 0.5
+  sirt_iter: 40
+  step_mm: 1.0
+
+gaussians:
+  fit_iter: 100
+  refine_iter: 100
+  max_gaussians: 30000
+
+diffusion:                         # conditional 3D DDPM on the prism (train on the rented GPU)
+  base_ch: 32
+  ch_mults: [1, 2, 4, 4]
+  num_res: 2
+  attn_levels: [3]
+  timesteps: 1000
+  batch_size: 4                    # RTX 4090 / A100: use --batch-size 8
+  train_steps: 40000
+  sample_steps: 50
+  dc_iters: 2
+  dc_start_frac: 0.6
+
+pipeline:
+  n_members: 8
+  n_members_physics: 4
+
+uncertainty:
+  alpha: 0.1                       # 90% intervals
+  mode: asymmetric

@@ -1,0 +1,54 @@
+# Tiny CPU configuration for scripts/smoke_test.py (synthetic phantoms, ~10-20 min on 4 cores).
+# Numbers are NOT representative of real results -- this only proves every step runs end-to-end.
+seed: 7
+
+paths:
+  work: work_smoke
+  outputs: outputs_smoke
+
+geometry:
+  det_shape: [200, 200]
+  det_pitch: [2.0, 2.0]
+
+simulation:
+  i0: 50000
+  step_mm: 1.25
+
+sirt:
+  voxel_mm: [4.0, 6.0, 4.0]
+  det_binning: 2
+  n_iter: 15
+  step_mm: 2.0
+
+roi:
+  size_vox: [24, 80, 24]
+  voxel_mm: [2.0, 3.2, 2.0]
+  box_mm: [30.0, 40.0, 30.0]
+  sirt_iter: 25
+  step_mm: 1.5
+
+gaussians:
+  fit_iter: 20
+  refine_iter: 20
+  max_gaussians: 4000
+
+diffusion:
+  base_ch: 8
+  ch_mults: [1, 2, 2]
+  num_res: 1
+  attn_levels: [2]
+  dropout: 0.0
+  timesteps: 200
+  batch_size: 4
+  train_steps: 300
+  sample_steps: 20
+  dc_iters: 1
+  dc_start_frac: 0.5
+
+pipeline:
+  n_members: 3
+  n_members_physics: 2
+
+growth:
+  interval_days: [180]
+  doubling_days: [300, 1.0e+9]          # 1e+9 = no growth (YAML needs the + sign)

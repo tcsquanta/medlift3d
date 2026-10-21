@@ -1,0 +1,20 @@
+# data and generated files (large) -- never commit
+data/
+work/
+work_smoke/
+outputs/
+outputs_smoke/
+*.npz
+*.pt
+*.nii.gz
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+# gradio
+.gradio/
+flagged/
