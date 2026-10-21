@@ -89,24 +89,43 @@ class DemoSession:
     def depth_mm(self, iy: int) -> float:
         return float(self.ctx.coarse_vg.index_to_world(np.array([0, iy, 0], float))[1])
 
-    def coronal_image(self, iy: int, with_candidates: bool = True) -> np.ndarray:
-        """RGB uint8 coronal DTS slice (superior at the top); candidates near this depth in yellow."""
+    def coronal_image(self, iy: int, with_candidates: bool = True, with_annotations: bool = True) -> np.ndarray:
+        """RGB uint8 coronal DTS slice (superior at the top); detector candidates near this depth
+        in yellow, radiologist-annotated nodules (LIDC ground truth) near this depth in green."""
         vol = self.ctx.coarse_hu
+        vg = self.ctx.coarse_vg
         iy = int(np.clip(iy, 0, vol.shape[1] - 1))
         sl = np.clip((vol[:, iy, :] + 1000.0) / 1400.0, 0, 1)[::-1]
         rgb = np.stack([sl] * 3, -1)
+        yy, xx = np.ogrid[: rgb.shape[0], : rgb.shape[1]]
+
+        def ring(iz, ix, rad, colour):
+            r = (vol.shape[0] - 1) - iz
+            rgb[np.abs(np.hypot(yy - r, xx - ix) - rad) < 0.8] = colour
+
         if with_candidates:
-            vg = self.ctx.coarse_vg
-            for k, c in enumerate(self.candidates):
+            for c in self.candidates:
                 iz, cy, ix = c["index_zyx"]
-                if abs(cy - iy) * vg.spacing[1] > 12.0:
-                    continue
-                r = int(round((vol.shape[0] - 1) - iz))
-                rad = max(3, int(round(2.5 * c["sigma_mm"] / vg.spacing[0])))
-                yy, xx = np.ogrid[: rgb.shape[0], : rgb.shape[1]]
-                ring = np.abs(np.hypot(yy - r, xx - ix) - rad) < 0.8
-                rgb[ring] = [1.0, 0.85, 0.0]
+                if abs(cy - iy) * vg.spacing[1] <= 12.0:
+                    ring(iz, ix, max(3, int(round(2.5 * c["sigma_mm"] / vg.spacing[0]))), [1.0, 0.85, 0.0])
+        if with_annotations:
+            for a in self.annotations():
+                if abs(a["iy"] - iy) * vg.spacing[1] <= max(12.0, a["diameter_mm"]):
+                    ring(a["iz"], a["ix"], max(4, int(round((0.5 * a["diameter_mm"] + 4.0) / vg.spacing[0]))),
+                         [0.1, 0.9, 0.2])
         return (rgb * 255).astype(np.uint8)
+
+    def annotations(self) -> List[Dict]:
+        """Radiologist-annotated nodules of the loaded case (LIDC consensus; phantoms: true nodules)."""
+        if self.case is None or self.ctx is None:
+            return []
+        vg = self.ctx.coarse_vg
+        out = []
+        for j, n in enumerate(self.case.nodules):
+            ix, iy, iz = np.round(vg.world_to_index(np.asarray(n.center_xyz, float))).astype(int)
+            out.append({"index": j, "xyz": [float(v) for v in n.center_xyz], "diameter_mm": float(n.diameter_mm),
+                        "ix": int(ix), "iy": int(iy), "iz": int(iz)})
+        return out
 
     def pixel_to_world(self, row: int, col: int, iy: int) -> List[float]:
         vg = self.ctx.coarse_vg

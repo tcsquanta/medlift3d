@@ -17,7 +17,7 @@ import torch
 
 from medlift3d.data.cases import load_case
 from medlift3d.detect import candidate_hits, detect_candidates
-from medlift3d.io import Paths, load_dts, save_json, save_sirt, stable_seed
+from medlift3d.io import Paths, load_dts, load_json, save_json, save_sirt, stable_seed
 from medlift3d.metrics import local_fwhm
 from medlift3d.physics import mu_to_hu
 from medlift3d.pipeline import coarse_sirt
@@ -82,7 +82,9 @@ def main():
             viz.save_orthoslices(os.path.join(out, f"{cid}_ct.png"), case.hu, case.vgeom, n.center_xyz,
                                  n.full_mask(case.hu.shape), f"{cid} CT", zoom_mm=zoom)
             viz.save_curve(os.path.join(out, f"{cid}_residual.png"), {"residual": hist}, f"{cid} SIRT")
-    save_json(cand_all, paths.p("results", "candidates.json")) if cand_all else None
+    if cand_all:                                   # merge: a run on some cases keeps the others' candidates
+        cpath = paths.p("results", "candidates.json")
+        save_json({**(load_json(cpath) if os.path.exists(cpath) else {}), **cand_all}, cpath)
     if done:
         ck.check("SIRT residual drops in every case (worst final/initial)", max(res_drop) < 0.9, f"{max(res_drop):.3f}", "< 0.9")
         r = np.array([x for x in ratios if np.isfinite(x)])

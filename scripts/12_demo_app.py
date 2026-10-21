@@ -2,7 +2,8 @@
 """Step 12 - interactive click-to-3D demo (Gradio).
 
 1. pick a case (or a synthetic phantom), scroll the DTS depth slider;
-   yellow circles are the detector's candidate nodules near that depth
+   yellow circles are the detector's candidate nodules near that depth,
+   green circles the radiologists' annotated nodules (LIDC ground truth)
 2. click on a nodule in the coronal DTS slice
 3. MedLift-3D reconstructs the nodule in 3D and reports volume and mass with
    intervals (calibrated if step 10 has been run), shows the 3D surface coloured
@@ -43,13 +44,19 @@ def build_ui(sess: DemoSession):
             sess.load_phantom(seed=int(name.split(":")[-1]))
         else:
             sess.load_case(name)
+        ann = sess.annotations()
         iy = sess.n_depth // 2
-        if sess.candidates:
+        if ann:
+            iy = ann[0]["iy"]
+        elif sess.candidates:
             iy = sess.candidates[0]["index_zyx"][1]
         state["iy"] = iy
         cands = [[k + 1, *[round(v, 1) for v in c["xyz"]], round(c["score"], 1)] for k, c in enumerate(sess.candidates)]
+        anns = [[a["index"] + 1, *[round(v, 1) for v in a["xyz"]], round(a["diameter_mm"], 1), a["iy"]] for a in ann]
         return (gr.Slider(minimum=0, maximum=sess.n_depth - 1, value=iy, step=1, label="DTS depth slice (y)"),
-                sess.coronal_image(iy), cands, f"Loaded {name}: {len(sess.candidates)} candidates. Click a nodule.")
+                sess.coronal_image(iy), cands, anns,
+                f"Loaded {name}: {len(sess.candidates)} detector candidates (yellow), {len(ann)} radiologist-annotated "
+                "nodules (green). Click a nodule.")
 
     def on_slider(iy):
         state["iy"] = int(iy)
@@ -101,7 +108,9 @@ def build_ui(sess: DemoSession):
                 status = gr.Markdown()
                 depth = gr.Slider(0, 100, step=1, label="DTS depth slice (y)")
                 img = gr.Image(label="coronal DTS slice (click a nodule)", interactive=False)
-                cands = gr.Dataframe(headers=["#", "x", "y", "z", "score"], label="candidate nodules")
+                cands = gr.Dataframe(headers=["#", "x", "y", "z", "score"], label="detector candidates (yellow)")
+                anns = gr.Dataframe(headers=["#", "x", "y", "z", "d (mm)", "depth slice"],
+                                    label="radiologist-annotated nodules (green; LIDC ground truth, for the demo)")
             with gr.Column(scale=1):
                 report = gr.Markdown()
                 plot3d = gr.Plot(label="3D nodule (uncertainty colour)")
@@ -111,7 +120,7 @@ def build_ui(sess: DemoSession):
                     dt = gr.Number(300, label="true doubling time (days, 0 = stable)")
                 fu_btn = gr.Button("simulate follow-up scan")
                 fu = gr.Markdown()
-        case.change(on_case, [case], [depth, img, cands, status])
+        case.change(on_case, [case], [depth, img, cands, anns, status])
         depth.change(on_slider, [depth], [img, status])
         img.select(on_click, None, [report, panel, plot3d])
         fu_btn.click(on_followup, [days, dt], [fu])
@@ -159,6 +168,9 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
         h = ui.medlift_handlers
         out = h["on_case"](cases[0])
         ck.check("UI: select case -> slice + candidates", out[1].ndim == 3, f"{len(out[2])} candidates")
+        green = (out[1][..., 1] > 200) & (out[1][..., 0] < 60)
+        ck.check("UI: annotated nodule marked in green at its depth", len(out[3]) == 0 or bool(green.any()),
+                 f"{len(out[3])} annotated nodules")
         iy = int(round(sess.ctx.coarse_vg.world_to_index(np.asarray(nod.center_xyz))[1]))
         h["on_slider"](iy)
         vg = sess.ctx.coarse_vg
