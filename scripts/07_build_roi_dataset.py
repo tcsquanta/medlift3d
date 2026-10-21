@@ -24,7 +24,7 @@ from medlift3d.data.cases import load_case
 from medlift3d.diffusion.dataset import save_pair
 from medlift3d.io import Paths, load_dts, load_json, load_sirt, stable_seed
 from medlift3d.metrics import psnr
-from medlift3d.physics import mu_to_hu
+from medlift3d.physics import hu_to_mu, mu_to_hu
 from medlift3d.roi import ROI, ROIProblem, resample_to_grid
 from medlift3d.simulate import add_noise
 from medlift3d.utils import Checker
@@ -71,7 +71,7 @@ def main():
     ids = pick_cases([c for c, s in splits["cases"].items() if s == "train"], args)
     ids = ids[: args.limit] if args.limit else ids
     counts = {"train": 0, "val": 0}
-    ps_c, previews = [], []
+    ps_c, previews, att_ratio = [], [], []
     for k, cid in enumerate(sorted(ids), 1):
         if not (os.path.exists(paths.dts(cid)) and os.path.exists(paths.sirt(cid))):
             print(f"[{k}] {cid}: missing DTS/SIRT, skipped")
@@ -103,10 +103,16 @@ def main():
                       nodule=j, center=c, center_idx=cidx)
             counts[split] += 1
             ps_c.append(psnr(np.clip(cond, -1000, 400), np.clip(target, -1000, 400), 1400.0))
+            # DTS measures each column's total attenuation well: the condition must keep it
+            att_ratio.append(float(hu_to_mu(cond, mu_w).sum() / max(hu_to_mu(target, mu_w).sum(), 1e-9)))
             if len(previews) < 4 and kind == "nodule":
                 previews.append((cond, target, roi.vgeom, c))
         print(f"[{k}/{len(ids)}] {cid} -> {split}: {len(centers)} pairs")
     ck.check("training pairs written", counts["train"] > 0, counts)
+    if att_ratio:
+        ck.check("condition keeps the prism's attenuation (sum mu cond / CT, median)",
+                 0.85 < np.median(att_ratio) < 1.15, f"{np.median(att_ratio):.3f} "
+                 f"(10-90%: {np.percentile(att_ratio, 10):.2f}-{np.percentile(att_ratio, 90):.2f})", "0.85 - 1.15")
     if ps_c:
         ck.info("PSNR of condition (ROI-SIRT) vs CT target, median dB", f"{np.median(ps_c):.2f}  <- the diffusion must beat this")
     for i, (cnd, tgt, vg, c) in enumerate(previews):

@@ -29,13 +29,17 @@ def body_extent(hu: np.ndarray, vg: VolumeGeometry, thr: float = -500.0) -> Tupl
     return vg.index_to_world(lo), vg.index_to_world(hi)
 
 
-def geometry_for_volume(hu: np.ndarray, vg: VolumeGeometry, gcfg: dict) -> DTSGeometry:
+def geometry_for_volume(hu: np.ndarray, vg: VolumeGeometry, gcfg: dict, support_margin_mm: float = 5.0) -> DTSGeometry:
     """Place the DTS system around a CT: isocentre at the body centre (x, y)
-    and volume centre (z); detector 10 mm in front of the anterior surface."""
+    and volume centre (z); detector 10 mm in front of the anterior surface.
+    The patient's AP extent (+ margin) is recorded as ``support_y`` -- a DTS unit
+    knows it from the patient thickness measured at acquisition."""
     lo, hi = body_extent(hu, vg)
     iso = (0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1]), float(vg.center[2]))
     d2i = estimate_detector_to_iso(lo[1], iso[1], default=float(gcfg["detector_to_iso"]))
-    return DTSGeometry.from_config(gcfg, iso=iso, detector_to_iso=d2i)
+    geom = DTSGeometry.from_config(gcfg, iso=iso, detector_to_iso=d2i)
+    geom.support_y = (float(lo[1]) - support_margin_mm, float(hi[1]) + support_margin_mm)
+    return geom
 
 
 @torch.no_grad()

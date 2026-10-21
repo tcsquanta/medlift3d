@@ -120,7 +120,9 @@ class DTSGeometry:
     Source k sits at ``iso + (0, SOD, SOD * tan(theta_k))`` with
     ``theta_k`` evenly spaced in ``[-sweep/2, +sweep/2]`` and
     ``SOD = sid - detector_to_iso``. The detector plane is
-    ``y = iso_y - detector_to_iso``.
+    ``y = iso_y - detector_to_iso``. ``support_y`` is the patient's antero-posterior
+    extent (world y range, measured at acquisition; here taken from the CT body
+    outline): reconstructions may put attenuation only there (see ``depth_support``).
     """
 
     n_views: int = 15
@@ -131,12 +133,15 @@ class DTSGeometry:
     det_pitch: Tuple[float, float] = (0.8, 0.8)      # (row pitch, col pitch) mm
     iso: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     det_offset: Tuple[float, float] = (0.0, 0.0)     # detector centre shift (dz, dx) mm
+    support_y: Optional[Tuple[float, float]] = None  # patient AP extent (y_min, y_max) mm, if known
 
     def __post_init__(self):
         self.det_shape = tuple(int(s) for s in self.det_shape)
         self.det_pitch = tuple(float(s) for s in self.det_pitch)
         self.iso = tuple(float(s) for s in self.iso)
         self.det_offset = tuple(float(s) for s in self.det_offset)
+        if self.support_y is not None:
+            self.support_y = tuple(float(s) for s in self.support_y)
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -168,6 +173,14 @@ class DTSGeometry:
     @property
     def det_y(self) -> float:
         return self.iso[1] - self.detector_to_iso
+
+    def depth_range(self) -> Tuple[float, float]:
+        """World y range that can hold attenuation: in front of the detector (the rays end
+        there) and, when known, inside the patient's AP extent ``support_y``."""
+        lo, hi = self.det_y, float("inf")
+        if self.support_y is not None:
+            lo, hi = max(lo, self.support_y[0]), self.support_y[1]
+        return lo, hi
 
     def angles(self) -> np.ndarray:
         if self.n_views == 1:
@@ -266,7 +279,23 @@ class DTSGeometry:
         off_z = self.det_offset[0] + (nr - nrb * b) / 2.0 * dv
         off_x = self.det_offset[1] - (nc - ncb * b) / 2.0 * du
         return DTSGeometry(self.n_views, self.sweep_deg, self.sid, self.detector_to_iso,
-                           (nrb, ncb), (dv * b, du * b), self.iso, (off_z, off_x))
+                           (nrb, ncb), (dv * b, du * b), self.iso, (off_z, off_x), self.support_y)
+
+
+def depth_support(vg: VolumeGeometry, geom: DTSGeometry) -> np.ndarray:
+    """[1, ny, 1] float mask of the grid's depth (y) slices that may hold attenuation.
+
+    DTS cannot tell where along a ray the attenuation sits, so an unconstrained
+    reconstruction smears it over the whole grid depth -- also behind the detector
+    and into the air behind the patient. Left there, that smear would later be
+    subtracted as "background" from the rays through a prism ROI (it removed ~1/3 of
+    the attenuation on real LIDC chests). A slice counts if it overlaps the range.
+    """
+    lo, hi = geom.depth_range()
+    y = vg.axes()[1]
+    half = 0.5 * vg.spacing[1]
+    m = ((y + half) > lo) & ((y - half) < hi)
+    return m.astype(np.float32)[None, :, None]
 
 
 def bin_projections(proj, b: int):

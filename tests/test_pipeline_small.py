@@ -51,3 +51,30 @@ def test_small_pipeline_runs_and_mass_is_close(small_case):
     assert abs(m_roi / m_gt - 1) < abs(v_roi / v_gt - 1), (m_roi, m_gt, v_roi, v_gt)
     assert abs(m_roi / m_gt - 1) < 0.5, (m_roi, m_gt)
     assert res["roi"]["n_rays"] > 1000
+
+
+def test_roi_data_match_true_column_with_air_margins():
+    """Regression (real LIDC chests): the CT grid reaches far beyond the patient in depth --
+    in front of the detector and behind the back. Unconstrained DTS smear there was subtracted
+    as background and the prism lost ~1/3 of its attenuation. With the patient depth support
+    the prism data (measured - background) must equal the projection of the true prism."""
+    from medlift3d.physics import hu_to_mu
+    from medlift3d.pipeline import build_problem
+    from medlift3d.roi import resample_to_grid
+
+    cfg = small_cfg()
+    ph = make_chest_phantom(spacing=(3.0, 3.0, 3.0), fov_mm=(360, 420, 280), n_vessels=10, seed=4,
+                            nodules=[NoduleSpec((-70.0, -10.0, 20.0), (8.0, 8.0, 8.0), 20.0, "big")])
+    case = case_from_phantom(ph, "ph_margins")
+    ctx = prepare_case_context(case, cfg, device="cpu", seed=0)
+    lo, hi = ctx.geom.depth_range()
+    ct_y = case.vgeom.axes()[1]
+    assert ((ct_y < lo) | (ct_y > hi)).sum() >= 10               # the CT grid really has air margins in depth
+    cy, sp = ctx.coarse_vg.axes()[1], ctx.coarse_vg.spacing[1]
+    assert cy.min() - 0.5 * sp >= lo - sp and cy.max() + 0.5 * sp <= hi + sp   # coarse grid cropped to the patient
+    prob = build_problem(ctx, case.nodules[0].center_xyz, cfg)
+    x_true = torch.as_tensor(hu_to_mu(resample_to_grid(case.hu, case.vgeom, prob.vg, order=1), 0.02),
+                             dtype=torch.float32)
+    with torch.no_grad():
+        ratio = float(prob.residual.mean() / prob.forward(x_true).mean())
+    assert 0.9 < ratio < 1.1, ratio

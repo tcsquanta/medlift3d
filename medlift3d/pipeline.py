@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from .data.cases import Case
-from .geometry import DTSGeometry, VolumeGeometry, bin_projections
+from .geometry import DTSGeometry, VolumeGeometry, bin_projections, depth_support
 from .measure import (mass_region, measure_ground_truth, measure_reconstruction, segment_nodule,
                       volume_mm3, gaussian_mass_mg)
 from .metrics import dice, hd95, psnr, ssim3d
@@ -49,10 +49,15 @@ class CaseContext:
         return mu_to_hu(self.coarse_mu.detach().cpu().numpy(), self.mu_water)
 
 
-def coarse_grid(vg: VolumeGeometry, voxel_mm: Sequence[float]) -> VolumeGeometry:
-    """Grid covering the CT field of view with coarse voxels."""
-    n = np.maximum(4, np.ceil(vg.size_mm / np.asarray(voxel_mm, float))).astype(int)   # (nx, ny, nz)
-    return VolumeGeometry.centered((n[2], n[1], n[0]), voxel_mm, vg.center)
+def coarse_grid(vg: VolumeGeometry, voxel_mm: Sequence[float], depth_range=None) -> VolumeGeometry:
+    """Grid covering the CT field of view with coarse voxels -- in depth (y) only the part
+    that can hold attenuation (``DTSGeometry.depth_range``: in front of the detector, inside
+    the patient) when given; the rest of the field of view is air by assumption."""
+    lo, hi = vg.box_min.astype(float), vg.box_max.astype(float)
+    if depth_range is not None:
+        lo[1], hi[1] = max(lo[1], float(depth_range[0])), min(hi[1], float(depth_range[1]))
+    n = np.maximum(4, np.ceil((hi - lo) / np.asarray(voxel_mm, float))).astype(int)   # (nx, ny, nz)
+    return VolumeGeometry.centered((n[2], n[1], n[0]), voxel_mm, 0.5 * (lo + hi))
 
 
 def coarse_sirt(proj: torch.Tensor, geom: DTSGeometry, vg_ct: VolumeGeometry, scfg: dict, device="cpu",
@@ -60,9 +65,13 @@ def coarse_sirt(proj: torch.Tensor, geom: DTSGeometry, vg_ct: VolumeGeometry, sc
     b = int(scfg["det_binning"])
     pb = bin_projections(proj, b)
     gb = geom.binned(b)
-    cvg = coarse_grid(vg_ct, scfg["voxel_mm"])
+    cvg = coarse_grid(vg_ct, scfg["voxel_mm"], geom.depth_range())
+    if x0 is not None and tuple(x0.shape) != tuple(cvg.shape):
+        raise ValueError(f"coarse SIRT warm start has shape {tuple(x0.shape)}, grid is {cvg.shape}: "
+                         "the saved coarse volume is from an older version -- re-run step 6")
     o, d = gb.rays(device=device)
-    solver = SIRT(Projector(cvg, step_mm=scfg["step_mm"]), o, d, device=device)
+    solver = SIRT(Projector(cvg, step_mm=scfg["step_mm"]), o, d, device=device,
+                  support=torch.as_tensor(depth_support(cvg, geom), device=device))
     x, hist = solver.run(pb.reshape(-1).to(device), n_iter=int(n_iter or scfg["n_iter"]), x0=x0,
                          relax=float(scfg["relax"]))
     return x, cvg, hist

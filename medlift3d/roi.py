@@ -24,7 +24,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 import torch
 
-from .geometry import DTSGeometry, VolumeGeometry
+from .geometry import DTSGeometry, VolumeGeometry, depth_support
 from .physics import hu_to_mu, mu_to_hu
 from .projector import Projector, ray_aabb
 from .sirt import SIRT
@@ -133,7 +133,9 @@ class ROIProblem:
         meas = torch.stack([proj[v, r0:r1, c0:c1] for v, (r0, r1, c0, c1) in enumerate(self.windows)], 0)
         meas = meas.reshape(-1).to(device).float()
         bgP = Projector(coarse_vg, step_mm=coarse_step_mm or 0.5 * float(min(coarse_vg.spacing)), use_checkpoint=False)
-        cm = coarse_mu.to(device).float()
+        # attenuation can only sit in front of the detector, inside the patient: a coarse volume
+        # reconstructed without that support carries depth smear there, which must not count as background
+        cm = coarse_mu.to(device).float() * torch.as_tensor(depth_support(coarse_vg, geom), device=device)
         with torch.no_grad():
             bg_out = bgP(cm, o, d, exclude_box=(roi.box_min, roi.box_max))
             bg_tot = bgP(cm, o, d)
@@ -149,6 +151,7 @@ class ROIProblem:
         self.background = bg_out[keep]
         self.residual = self.meas - self.background
         self.P = Projector(self.vg, step_mm=step_mm)
+        self.support = torch.as_tensor(depth_support(self.vg, geom), device=device)   # [1, H, 1]
         self._sirt: Optional[SIRT] = None
 
     # ------------------------------------------------------------------ model
@@ -160,7 +163,7 @@ class ROIProblem:
 
     def sirt_solver(self) -> SIRT:
         if self._sirt is None:
-            self._sirt = SIRT(self.P, self.o, self.d, device=self.device)
+            self._sirt = SIRT(self.P, self.o, self.d, device=self.device, support=self.support)
         return self._sirt
 
     def sirt(self, n_iter: int = 40, x0_mu: Optional[torch.Tensor] = None, init_hu: float = -850.0,
