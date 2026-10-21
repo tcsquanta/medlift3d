@@ -95,6 +95,23 @@ reported as context.
 Do **not** claim: "first use of 3DGS in medical imaging", "first uncertainty for 3DGS", "first
 conformal prediction in CT" -- all exist.
 
+## 5b. First real-data observations (4 LIDC-IDRI patients, 39 nodules, CPU, Oct 21)
+
+Measured with the pipeline before the GPU run (useful for Ch.4 / the defense):
+
+* Data path: DICOM slice positions = pylidc's in every scan (0.000 mm); consensus masks sit on
+  nodule tissue (median -202 HU); consensus volume / mean reader volume 0.81.
+* Simulated low-dose DTS (I0 = 2e4 photons / 0.8 mm pixel / view, ~1/20-1/40 of clinical DTS dose):
+  median nodule CNR in a single view 3.3; SIRT residual 1 -> 0.02; nodules ~3.5x longer in depth
+  than in-plane (missing wedge).
+* Background bug found and fixed: without a depth support, DTS smear behind the detector / patient
+  was subtracted as background and the prism kept only 67-81% of its attenuation; now 98.7%.
+* Physics-only limit: a 6-7 mm solid nodule (700-850 HU above lung in CT) is only 57-68 HU above the
+  lung in the prism SIRT, against 35-41 HU of anatomical texture -- with or without noise, and with
+  40 or 120 iterations or relaxation 1.9. The depth smear and clutter, not convergence or dose, limit
+  physics-only DTS; this is the gap the learned prior has to close (H2).
+* The training-free candidate detector found mostly end-on vessels (recall@10 6%).
+
 ## 6. Limitations (state them in the report)
 
 * Simulation only: no public chest DTS dataset with CT ground truth exists. Monochromatic beam, no scatter.
