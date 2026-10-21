@@ -101,7 +101,8 @@ def main():
         case = load_case(paths.case(cid), load_readers=False)
         for j, n in enumerate(case.nodules[:2]):
             viz.save_orthoslices(os.path.join(out, f"{cid}_nod{j}.png"), case.hu, case.vgeom, n.center_xyz,
-                                 n.full_mask(case.hu.shape), f"{cid} d={n.diameter_mm:.1f}mm")
+                                 n.full_mask(case.hu.shape), f"{cid} d={n.diameter_mm:.1f}mm",
+                                 zoom_mm=max(30.0, 4 * n.diameter_mm))
     # splits (merge with an existing file so re-runs keep assignments)
     sp_path = paths.p("splits.json")
     old = load_json(sp_path) if os.path.exists(sp_path) else {}

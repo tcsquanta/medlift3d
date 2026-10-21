@@ -75,9 +75,11 @@ def main():
               f"nodule ranks among candidates {ranks[-len(case.nodules):]}")
         if done <= args.figures:
             n = case.nodules[0]
-            viz.save_orthoslices(os.path.join(out, f"{cid}_sirt.png"), rec, cvg, n.center_xyz, None, f"{cid} DTS-SIRT")
+            zoom = max(40.0, 5 * n.diameter_mm)
+            viz.save_orthoslices(os.path.join(out, f"{cid}_sirt.png"), rec, cvg, n.center_xyz, None, f"{cid} DTS-SIRT",
+                                 zoom_mm=zoom)
             viz.save_orthoslices(os.path.join(out, f"{cid}_ct.png"), case.hu, case.vgeom, n.center_xyz,
-                                 n.full_mask(case.hu.shape), f"{cid} CT")
+                                 n.full_mask(case.hu.shape), f"{cid} CT", zoom_mm=zoom)
             viz.save_curve(os.path.join(out, f"{cid}_residual.png"), {"residual": hist}, f"{cid} SIRT")
     save_json(cand_all, paths.p("results", "candidates.json")) if cand_all else None
     if done:

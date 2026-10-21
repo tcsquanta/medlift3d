@@ -7,9 +7,9 @@
 | 0-1 | check env, physics checks | anything | 1 min | 2 min | 2-3 min |
 | smoke test | `smoke_test.py` | anything (CPU fine) | 10 min | 20 min | 45-90 min |
 | 2 | select LIDC cases (annotations only) | CPU | 2-4 min | 2-4 min | 2-4 min |
-| 3 | download ~200 LIDC series (~22 GB) | **disk + bandwidth** | 30-90 min (TCIA speed) | disk limit is tight | -- |
-| 4 | DICOM -> cases | CPU / RAM | 10-20 min | 10-20 min | 10-20 min |
-| 5 | DTS simulation (200 cases) | GPU | ~5 min | ~15 min | 3-6 h |
+| 3 | download ~200 LIDC series (~22 GB) | **disk + bandwidth** | 30-90 min (TCIA speed) | disk limit is tight | measured: 4 series (0.45 GB) in 30 s |
+| 4 | DICOM -> cases | CPU / RAM | 40-80 min | 40-80 min | measured: ~23 s per case |
+| 5 | DTS simulation (200 cases) | GPU | ~5 min | ~15 min | measured: ~4 min per real CT (4 cores) |
 | 6 | coarse SIRT (200 cases) | GPU | ~15 min | ~45 min | many hours |
 | 7 | diffusion training pairs (~2000) | GPU | ~30-45 min | ~1.5-2.5 h | too slow |
 | **8** | **diffusion training (40k steps)** | **big GPU** | **~3-4 h (batch 8, bf16)** | ~10-14 h (batch 4, fp16) | no |
@@ -38,7 +38,7 @@ Use Kaggle or your laptop only for the smoke test and code checks.
    ```bash
    git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
    cd medlift3d
-   pip install pydicom pylidc sqlalchemy scikit-image pyyaml pandas gradio plotly pytest   # torch is preinstalled
+   pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest   # torch is preinstalled
    python scripts/00_check_env.py                 # GPU listed? projector speed?
    python -m pytest -q                            # ~2-5 min, all tests should pass
    ```

@@ -5,8 +5,6 @@ scipy>=1.10
 scikit-image>=0.21
 matplotlib>=3.7
 pyyaml>=6.0
-tqdm
-pandas
 # LIDC-IDRI
 pydicom>=2.4
 pylidc==0.2.3            # radiologist annotations (bundled SQLite DB); we patch its NumPy/pkg_resources quirks

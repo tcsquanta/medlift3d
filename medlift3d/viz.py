@@ -28,27 +28,45 @@ def _idx(vg: VolumeGeometry, xyz) -> np.ndarray:
 
 
 def orthoslices(vol: np.ndarray, vg: VolumeGeometry, xyz, mask: Optional[np.ndarray] = None, ax=None,
-                window=HU_WIN, title: str = "", cmap="gray"):
-    """Axial | coronal | sagittal through ``xyz`` on three axes (returns the axes)."""
+                window=HU_WIN, title: str = "", cmap="gray", zoom_mm: Optional[float] = None):
+    """Axial | coronal | sagittal through ``xyz`` on three axes (returns the axes).
+
+    ``zoom_mm`` shows only a ``zoom_mm`` wide window around ``xyz`` (to check small nodules)."""
     ix, iy, iz = _idx(vg, xyz)
     sx, sy, sz = vg.spacing
+    nz = vol.shape[0]
     if ax is None:
         _, ax = plt.subplots(1, 3, figsize=(11, 3.8))
-    views = [(vol[iz, :, :], None if mask is None else mask[iz, :, :], sy / sx, "axial (x-y)"),
-             (vol[:, iy, :][::-1], None if mask is None else mask[:, iy, :][::-1], sz / sx, "coronal (x-z) = DTS slice"),
-             (vol[:, :, ix][::-1], None if mask is None else mask[:, :, ix][::-1], sz / sy, "sagittal (y-z): depth is horizontal")]
-    for a, (img, m, aspect, name) in zip(ax, views):
+    # (image, mask, aspect, name, (column of xyz, row of xyz), (column, row) spacing)
+    views = [(vol[iz, :, :], None if mask is None else mask[iz, :, :], sy / sx, "axial (x-y)", (ix, iy), (sx, sy)),
+             (vol[:, iy, :][::-1], None if mask is None else mask[:, iy, :][::-1], sz / sx, "coronal (x-z) = DTS slice",
+              (ix, nz - 1 - iz), (sx, sz)),
+             (vol[:, :, ix][::-1], None if mask is None else mask[:, :, ix][::-1], sz / sy, "sagittal (y-z), depth ->",
+              (iy, nz - 1 - iz), (sy, sz))]
+    for a, (img, m, aspect, name, (c, r), (sc, sr)) in zip(ax, views):
         a.imshow(img, cmap=cmap, vmin=window[0], vmax=window[1], aspect=aspect)
         if m is not None and m.any():
             a.contour(m.astype(float), levels=[0.5], colors="r", linewidths=0.8)
+        if zoom_mm:
+            hc, hr = zoom_mm / 2 / sc, zoom_mm / 2 / sr
+            a.set_xlim(c - hc, c + hc)
+            a.set_ylim(r + hr, r - hr)
+            name = f"{name}, {zoom_mm:.0f} mm"
         a.set_title(f"{title} {name}".strip(), fontsize=8)
         a.axis("off")
     return ax
 
 
-def save_orthoslices(path: str, vol, vg, xyz, mask=None, title="", window=HU_WIN) -> str:
-    fig, ax = plt.subplots(1, 3, figsize=(11, 3.8))
-    orthoslices(vol, vg, xyz, mask, ax, window, title)
+def save_orthoslices(path: str, vol, vg, xyz, mask=None, title="", window=HU_WIN,
+                     zoom_mm: Optional[float] = None) -> str:
+    """Three orthogonal slices; with ``zoom_mm`` a second row zooms in on ``xyz``."""
+    rows = 2 if zoom_mm else 1
+    fig, ax = plt.subplots(rows, 3, figsize=(11, 3.8 * rows), squeeze=False)
+    orthoslices(vol, vg, xyz, mask, ax[0], window)
+    if zoom_mm:
+        orthoslices(vol, vg, xyz, mask, ax[1], window, zoom_mm=zoom_mm)
+    if title:
+        fig.suptitle(title, fontsize=9)
     return _save(fig, path)
 
 
