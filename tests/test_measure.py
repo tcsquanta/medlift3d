@@ -59,3 +59,25 @@ def test_coronal_diameter_of_sphere():
     mask, _ = segment_nodule(vol, vg, (0, 0, 0), -850.0)
     d_long, d_short = coronal_diameters(mask, vg)
     assert abs(d_long - 2 * r) < 1.5 and abs(d_short - 2 * r) < 1.5
+
+
+def test_segmentation_detaches_from_adjacent_structure_or_fails():
+    """Nodule touching a wall: raise the threshold until it detaches; if it never does
+    (wall as dense as the nodule), report nothing instead of the whole wall."""
+    from medlift3d.geometry import VolumeGeometry
+    from medlift3d.measure import segment_nodule
+
+    vg = VolumeGeometry((80, 80, 80), (1.0, 1.0, 1.0), (-40.0, -40.0, -40.0))
+    z, y, x = np.meshgrid(*(np.arange(80) - 40.0,) * 3, indexing="ij")
+    sphere = x ** 2 + y ** 2 + z ** 2 <= 4.0 ** 2
+    wall = x >= 3.5                                          # touches the nodule, extends past the search limit
+    for wall_hu, separable in ((-300.0, True), (0.0, False)):
+        vol = np.full((80, 80, 80), -850.0, np.float32)
+        vol[wall] = wall_hu
+        vol[sphere] = 0.0
+        mask, info = segment_nodule(vol, vg, (0.0, 0.0, 0.0), baseline_hu=-850.0)
+        if separable:
+            assert info["threshold_raised"] >= 1 and not info["touches_limit"]
+            assert 0.6 < mask.sum() / sphere.sum() < 1.4, mask.sum() / sphere.sum()
+        else:
+            assert info["touches_limit"] and not mask.any()

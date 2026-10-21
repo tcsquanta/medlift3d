@@ -51,16 +51,20 @@ def dilate_mm(mask: np.ndarray, vg: VolumeGeometry, radii_mm: Sequence[float]) -
 def segment_nodule(vol_hu: np.ndarray, vg: VolumeGeometry, seed_xyz, baseline_hu: float,
                    mode: str = "halfmax", fixed_hu: float = -400.0, floor_hu: float = -1000.0,
                    search_radius_mm=(6.0, 12.0, 6.0), open_radius_vox: int = 1,
-                   min_contrast_hu: float = 50.0, max_extent_mm=(25.0, 50.0, 25.0)) -> Tuple[np.ndarray, Dict]:
+                   min_contrast_hu: float = 50.0, max_extent_mm=(25.0, 50.0, 25.0),
+                   max_raise: int = 6) -> Tuple[np.ndarray, Dict]:
     """Seeded nodule segmentation.
 
     halfmax: threshold = baseline + 0.5 (peak - baseline), peak = max HU within
     the (depth-elongated) search ellipsoid around the seed; fixed: threshold = ``fixed_hu``.
     The threshold is at least ``min_contrast_hu`` above the local lung (so faint
     ground-glass nodules still segment) and the result is confined to an
-    ellipsoid of radii ``max_extent_mm`` around the peak (no leaks into the
-    chest wall / heart). A morphological opening detaches thin vessels; the
-    connected component at the peak is kept and its eroded rim restored.
+    ellipsoid of radii ``max_extent_mm`` around the peak. A morphological opening
+    detaches thin vessels; the connected component at the peak is kept and its
+    eroded rim restored. If that component still reaches the ellipsoid (leak into
+    the chest wall / diaphragm / vessels), the threshold is raised towards the peak
+    (up to ``max_raise`` steps, ~90% of the peak); if it never detaches the result
+    is empty (``touches_limit``) -- a failed measurement rather than a wrong one.
     """
     near = sphere_mask(vg, seed_xyz, search_radius_mm)
     info: Dict = {"threshold_hu": float("nan"), "peak_hu": float("nan"), "peak_xyz": [float("nan")] * 3,
@@ -77,19 +81,31 @@ def segment_nodule(vol_hu: np.ndarray, vg: VolumeGeometry, seed_xyz, baseline_hu
     if peak <= thr or peak - baseline_hu < 2.0 * min_contrast_hu:
         return np.zeros(vol_hu.shape, bool), info
     limit = sphere_mask(vg, peak_xyz, max_extent_mm)
-    binary = (vol_hu > thr) & limit
-    comp = None
-    if open_radius_vox > 0:
-        opened = ndimage.binary_opening(binary, structure=ball(open_radius_vox))
-        if opened[pk]:
-            lab, _ = ndimage.label(opened)
-            comp = lab == lab[pk]
-            comp = ndimage.binary_dilation(comp, structure=ball(open_radius_vox)) & binary
-    if comp is None:
+
+    def component(t: float) -> np.ndarray:
+        binary = (vol_hu > t) & limit
+        if open_radius_vox > 0:
+            opened = ndimage.binary_opening(binary, structure=ball(open_radius_vox))
+            if opened[pk]:
+                lab, _ = ndimage.label(opened)
+                return ndimage.binary_dilation(lab == lab[pk], structure=ball(open_radius_vox)) & binary
         lab, _ = ndimage.label(binary)
-        comp = lab == lab[pk]
+        return lab == lab[pk]
+
     edge = limit & ~ndimage.binary_erosion(limit)
-    info["touches_limit"] = bool((comp & edge).sum() > 0.05 * max(1, edge.sum()))
+    n_edge = 0.05 * max(1, int(edge.sum()))
+    comp = component(thr)
+    # a component reaching the search limit has leaked into an adjacent structure (chest wall,
+    # diaphragm, vessel tree): raise the threshold towards the peak until it detaches
+    raised = 0
+    while (comp & edge).sum() > n_edge and raised < max_raise:
+        thr = thr + 0.25 * (peak - thr)
+        comp = component(thr)
+        raised += 1
+    info.update(threshold_hu=float(thr), threshold_raised=raised,
+                touches_limit=bool((comp & edge).sum() > n_edge))
+    if info["touches_limit"]:                      # still attached at ~90% of the peak: no measurement
+        return np.zeros(vol_hu.shape, bool), info
     return comp, info
 
 
