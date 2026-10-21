@@ -22,16 +22,23 @@ from .geometry import VolumeGeometry
 from .measure import dilate_mm
 
 FAST, INDET, SLOW = "fast (<400 d)", "indeterminate (400-600 d)", "slow/stable (>600 d)"
+NOT_MEASURABLE = "not measurable"
+MIN_MEASURABLE = 1e-2          # volumes (mm3) / masses (mg) at or below this are failed measurements
 
 
 def doubling_time(q1: float, q2: float, dt_days: float) -> float:
-    """Doubling time in days (inf if no growth)."""
-    if not (q1 > 0 and q2 > 0) or q2 <= q1:
+    """Doubling time in days: inf if no growth, nan if either scan has no measurement
+    (the pipeline stores a failed segmentation as ~0, which would fake explosive growth)."""
+    if not (q1 > MIN_MEASURABLE and q2 > MIN_MEASURABLE):
+        return float("nan")
+    if q2 <= q1:
         return float("inf")
     return float(dt_days * math.log(2.0) / math.log(q2 / q1))
 
 
 def growth_category(dt_days: float) -> str:
+    if math.isnan(dt_days):
+        return NOT_MEASURABLE
     if dt_days < 400:
         return FAST
     if dt_days <= 600:

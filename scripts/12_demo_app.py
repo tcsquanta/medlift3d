@@ -39,8 +39,8 @@ def build_ui(sess: DemoSession):
         return f
 
     def on_case(name):
-        if name.startswith("phantom"):
-            sess.load_phantom(seed=int(name.split(":")[-1]) if ":" in name else 0)
+        if name.startswith("phantom:"):                     # on-the-fly synthetic chest (saved cases load from disk)
+            sess.load_phantom(seed=int(name.split(":")[-1]))
         else:
             sess.load_case(name)
         iy = sess.n_depth // 2
@@ -84,10 +84,13 @@ def build_ui(sess: DemoSession):
             g = sess.followup(float(days), float(dt) if float(dt) > 0 else 1e9)
         except Exception as e:
             return f"Follow-up not possible: {e}"
+        def days(d):
+            return "no growth" if d == float("inf") else ("not measurable" if d != d else f"{d:.0f} d")
+
         return (f"### Virtual follow-up after {g['interval_days']:.0f} days\n"
-                f"- true doubling time: {g['true_doubling_days']:.0f} d -> **{g['true_category']}**\n"
-                f"- volume doubling time (VDT): {g['vdt_days']:.0f} d -> {g['vdt_category']}\n"
-                f"- mass doubling time (MDT): {g['mdt_days']:.0f} d -> {g['mdt_category']}")
+                f"- true doubling time: {days(g['true_doubling_days'])} -> **{g['true_category']}**\n"
+                f"- volume doubling time (VDT): {days(g['vdt_days'])} -> {g['vdt_category']}\n"
+                f"- mass doubling time (MDT): {days(g['mdt_days'])} -> {g['mdt_category']}")
 
     choices = sess.available_cases() + ["phantom:0", "phantom:1"]
     with gr.Blocks(title="MedLift-3D") as demo:
@@ -163,7 +166,8 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
         row = (vg.shape[0] - 1) - iz
         md, path, fig = h["on_click"](SimpleNamespace(index=[int(ix), int(row)]))
         ck.check("UI: click on the nodule -> report + panel + 3D plot", "Mass" in md and os.path.exists(path), path)
-        ck.check("UI: follow-up button", "doubling" in h["on_followup"](180, 300), "")
+        fu_md = h["on_followup"](180, 300)
+        ck.check("UI: follow-up button", "doubling" in fu_md, fu_md.splitlines()[0][:120])
     except ImportError:
         ck.info("Gradio UI", "gradio not installed (pip install gradio plotly) -- backend verified only")
     os.makedirs(out_dir, exist_ok=True)

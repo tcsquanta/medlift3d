@@ -17,7 +17,7 @@ import torch
 
 from .data.cases import Case, case_from_phantom, load_case
 from .detect import detect_candidates
-from .growth import doubling_time, growth_category, scale_for_doubling
+from .growth import MIN_MEASURABLE, doubling_time, growth_category, scale_for_doubling
 from .io import Paths, load_dts, load_sirt, stable_seed
 from .phantom import make_chest_phantom
 from .physics import mu_to_hu
@@ -133,14 +133,14 @@ class DemoSession:
         res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
                              seed=seed, keep_volumes=True)
         secs = res["timing_s"]["total"]
-        if res["methods"][method]["volume_mm3"] <= 0 and method != "roi_gs":
+        if res["methods"][method]["volume_mm3"] <= MIN_MEASURABLE and method != "roi_gs":
             note = f"{method} found no nodule at the click; showing the physics-only result (roi_gs)"
             method = "roi_gs"
             res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
                                  seed=seed, keep_volumes=True)
             secs += res["timing_s"]["total"]
         e = res["methods"][method]
-        if e["volume_mm3"] <= 0:
+        if e["volume_mm3"] <= MIN_MEASURABLE:
             note = "no nodule found at the click (contrast too low or not a nodule)"
         v_lo, v_hi, how = self._interval(e["volume_mm3"], e["volume_log_std"], "volume", method)
         m_lo, m_hi, _ = self._interval(e["mass_mg"], e["mass_log_std"], "mass", method)

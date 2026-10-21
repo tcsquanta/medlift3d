@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from medlift3d.growth import (FAST, INDET, SLOW, doubling_time, growth_category, scale_for_doubling,
+from medlift3d.growth import (FAST, INDET, NOT_MEASURABLE, SLOW, doubling_time, growth_category, scale_for_doubling,
                               virtual_growth)
 from medlift3d.phantom import sphere_volume
 from medlift3d.uncertainty import ConformalCalibrator, coverage, relative_width, sparsification
@@ -63,6 +63,9 @@ def test_doubling_time_and_categories():
     assert abs(doubling_time(100.0, 200.0, 365.0) - 365.0) < 1e-9
     assert doubling_time(100.0, 90.0, 365.0) == float("inf")
     assert growth_category(200) == FAST and growth_category(500) == INDET and growth_category(900) == SLOW
+    # a failed measurement (stored as ~1e-6) must not look like explosive growth
+    assert math.isnan(doubling_time(1e-6, 500.0, 180.0)) and math.isnan(doubling_time(100.0, 0.0, 180.0))
+    assert growth_category(float("nan")) == NOT_MEASURABLE and growth_category(float("inf")) == SLOW
     s = scale_for_doubling(180.0, 300.0)
     assert abs(s ** 3 - 2 ** (180.0 / 300.0)) < 1e-9
 

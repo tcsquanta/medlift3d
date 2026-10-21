@@ -71,7 +71,7 @@ def main():
     ap.add_argument("--methods", nargs="+", default=None)
     ap.add_argument("--members", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
-    ap.add_argument("--limit", type=int, default=30, help="max nodules")
+    ap.add_argument("--limit", type=int, default=30, help="nodules in the experiment (finished ones count; re-runs only rebuild tables)")
     ap.add_argument("--pairs-per-nodule", type=int, default=2)
     ap.add_argument("--warm-sirt-iter", type=int, default=10)
     args = ap.parse_args()
@@ -114,7 +114,8 @@ def main():
             rng = np.random.default_rng(stable_seed(cid, j, "growth"))
             pick = [combos[i] for i in rng.choice(len(combos), size=min(args.pairs_per_nodule, len(combos)), replace=False)]
             pick = [p for p in pick if (cid, j, p[0], p[1]) not in done]
-            if not pick:
+            if not pick:                                   # finished in an earlier run: still counts toward --limit
+                n_nod += 1
                 continue
             roi = ROI.from_config(nod.center_xyz, cfg["roi"], geom)
             gt_b = ground_truth_for_roi(case, j, roi, cfg["measure"])
@@ -174,8 +175,8 @@ def main():
     if not rows:
         ck.finish(out)
         return
-    lines = ["| method | quantity | category accuracy | median abs log2(DT_est/DT_true) (growing) | false growth alarms (stable) |",
-             "|---|---|---|---|---|"]
+    lines = ["| method | quantity | category accuracy | median abs log2(DT_est/DT_true) (growing) | false growth alarms (stable) "
+             "| not measurable |", "|---|---|---|---|---|---|"]
     acc = {}
     for m in sorted({k for r in rows for k in r["methods"]}):
         for qty in ("volume", "mass"):
@@ -188,16 +189,20 @@ def main():
                   for r in grow if np.isfinite(r["methods"][m][qty]["dt_days"])]
             stab = [r for r in R if r["true_dt_days"] >= 1e8]
             fa = np.mean([r["methods"][m][qty]["dt_days"] < 600 for r in stab]) if stab else float("nan")
-            acc[(m, qty)] = (cat, np.median(le) if le else float("nan"))
+            nm = np.mean([math.isnan(r["methods"][m][qty]["dt_days"]) for r in R])   # failed scan(s): counted as wrong
+            acc[(m, qty)] = (cat, np.median(le) if le else float("nan"), nm)
             lines.append(f"| {m} | {qty} ({'VDT' if qty == 'volume' else 'MDT'}) | {100 * cat:.0f}% | "
-                         f"{np.median(le) if le else float('nan'):.2f} | {100 * fa if stab else float('nan'):.0f}% |")
+                         f"{np.median(le) if le else float('nan'):.2f} | {100 * fa if stab else float('nan'):.0f}% | "
+                         f"{100 * nm:.0f}% |")
     print("\n" + "\n".join(lines) + "\n")
     with open(os.path.join(out, "table_growth.md"), "w") as f:
         f.write("\n".join(lines) + "\n")
     best = "diffusion_gs" if any("diffusion_gs" in r["methods"] for r in rows) else ("roi_gs" if any("roi_gs" in r["methods"] for r in rows) else "roi_sirt")
     if (best, "mass") in acc and (best, "volume") in acc:
-        ck.check(f"H4 MDT category accuracy >= VDT ({best})", acc[(best, "mass")][0] >= acc[(best, "volume")][0],
-                 f"MDT {100 * acc[(best, 'mass')][0]:.0f}% vs VDT {100 * acc[(best, 'volume')][0]:.0f}%")
+        (cm, _, nm_m), (cv, _, nm_v) = acc[(best, "mass")], acc[(best, "volume")]
+        ck.check(f"H4 MDT category accuracy >= VDT ({best}; needs most pairs measurable)",
+                 cm >= cv and max(nm_m, nm_v) < 0.5,
+                 f"MDT {100 * cm:.0f}% vs VDT {100 * cv:.0f}% (not measurable: MDT {100 * nm_m:.0f}%, VDT {100 * nm_v:.0f}%)")
     xs, ys, labs = [], [], []
     for qty in ("volume", "mass"):
         R = [r for r in rows if best in r["methods"] and r["true_dt_days"] < 1e8 and np.isfinite(r["methods"][best][qty]["dt_days"])]
