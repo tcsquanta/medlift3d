@@ -12,7 +12,7 @@ and writes `outputs/<step>/verification.md` + `verification.json` and figures. A
 code check means something is wrong: stop and look before continuing. Lines starting with
 **H1-H4** are *scientific results*, not code checks; they may honestly come out either way.
 
-Run the unit tests any time: `python -m pytest -q` (40 tests, about 5-10 min on CPU).
+Run the unit tests any time: `python -m pytest -q` (42 tests, about 5-10 min on CPU).
 
 ## Step 0 - environment (`00_check_env.py`)
 * PASS: torch, numpy, scipy, scikit-image, matplotlib, yaml, pydicom import; pylidc database has 1018 scans.
@@ -39,15 +39,21 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * Figure: `selection_histograms.png` (diameter, malignancy, texture).
 
 ## Step 3 - download (`03_download_lidc.py`)
-* PASS: all series downloaded. Failed series are listed in `work/lidc_failed.txt`. Simply re-run.
+* PASS: all series downloaded. Failed series are listed in `work/lidc_failed.txt`. Simply re-run
+  (finished series are skipped; an interrupted series is never mistaken for a finished one).
+* PASS: every series has at least as many DICOM files as the pylidc database lists slices.
+* Real example (4 patients): `4/4 complete`, 0.45 GB in 30 s.
 
 ## Step 4 - cases (`04_prepare_cases.py`)
 * Per case: `slice dz err 0.000 mm` = DICOM slice positions equal pylidc's (mask alignment).
 * PASS: masks contain nodule-like HU (median > -600); consensus-mask volume / readers' volume in 0.5-1.5.
-* Figures: `<case>_nod0.png` -- the red contour must sit exactly on the nodule in all 3 views.
+* Real example (4 patients, 39 nodules): dz err 0.000 mm in every case, median -202 HU, volume ratio 0.81.
+* Figures: `<case>_nod0.png` -- the red contour must sit exactly on the nodule in all 3 views
+  (top row: whole slice; bottom row: zoomed on the nodule).
 
 ## Step 5 - DTS simulation (`05_simulate_dts.py`)
 * PASS: line integrals physical (max < 15); median nodule contrast-to-noise in one view > 1.
+* Real example (LIDC-IDRI-0012): max line integral 6.83, median nodule CNR 3.5.
 * Figures: `<case>_views.png` -- radiograph-like views, red circle on the nodule in every view.
 
 ## Step 6 - coarse SIRT (`06_reconstruct_sirt.py`)
