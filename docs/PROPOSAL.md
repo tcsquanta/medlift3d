@@ -47,11 +47,16 @@ Any of these can come out false. The report must state whichever results we actu
    then 15 views, +-15 deg linear sweep, SID 1800 mm,
    43 cm flat panel (0.8 mm pixels), monochromatic attenuation, Poisson noise (I0 = 2e4/pixel).
    Simulated at CT resolution with fine ray sampling; reconstructed on different grids (no inverse crime).
-3. **Standard DTS reconstruction:** coarse whole-chest SIRT (2.5 mm). The doctor scrolls coronal slices;
+3. **Standard DTS reconstruction:** coarse whole-chest SIRT (2.5 mm), confined in depth to the patient
+   (between the detector and the back, from the patient thickness that a DTS unit measures at acquisition;
+   here the CT body outline + 5 mm). Without this support DTS smears attenuation into the air in front of and
+   behind the patient, and on real LIDC chests the prism then lost ~1/3 of its attenuation as false
+   "background". The doctor scrolls coronal slices;
    a training-free LoG + Hessian blob detector suggests candidates; the click gives (x, z) and the slice gives depth y.
 4. **Prism ROI ("zoom in-plane, not in depth"):** a 64 x 64 mm column through the whole chest
-   (64 x 128 x 64 voxels, 1 x 2 x 1 mm). Rays are kept only if >= 50% of their attenuation lies in
-   the prism, so the out-of-prism background (from the coarse SIRT) is a small correction.
+   (64 x 128 x 64 voxels, 1 x 2 x 1 mm; shifted back for deep nodules in thick chests). Rays are kept only
+   if >= 50% of their attenuation lies in the prism, so the out-of-prism background (from the coarse SIRT)
+   is a small correction. Check (step 7): the prism keeps the column's total attenuation (ratio ~1).
    (A small 3D box fails: each ray's attenuation is mostly outside the box and the background error
    swamps the nodule. We measured a 73% relative error for the box vs 5-7% for the prism.)
 5. **Conditional 3D diffusion prior:** a 3D U-Net (~11M parameters, v-prediction, cosine schedule)
@@ -95,7 +100,12 @@ conformal prediction in CT" -- all exist.
 * Simulation only: no public chest DTS dataset with CT ground truth exists. Monochromatic beam, no scatter.
 * Virtual growth is isotropic scaling; real nodules grow irregularly.
 * LIDC "ground truth" is itself variable between radiologists (we report reader CV).
-* The candidate detector is training-free and modest. The clinician can click anywhere.
+* The candidate detector is training-free and modest (on the first real LIDC patients it mostly found
+  end-on vessels: recall@10 0-11%). The clinician can click anywhere; the demo also marks the
+  radiologists' annotated nodules. A trained detector is future work.
+* The patient's antero-posterior thickness is assumed known (it bounds the reconstruction in depth);
+  here it comes from the CT body outline. CT field of view limits the simulated chest (rays outside
+  the CT see air).
 
 ## 7. What to change in the FYDP report
 

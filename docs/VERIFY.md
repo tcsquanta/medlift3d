@@ -57,12 +57,16 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * Figures: `<case>_views.png` -- radiograph-like views, red circle on the nodule in every view.
 
 ## Step 6 - coarse SIRT (`06_reconstruct_sirt.py`)
+* The volume is confined in depth to the patient (detector to back; `support_y` recorded by step 5).
 * PASS: residual drops; depth/in-plane FWHM ratio > 1.3 (missing wedge visible).
 * INFO: candidate detector recall@10 / @3 (training-free; modest on purpose -- the doctor can click anywhere).
 * Figures: `<case>_sirt.png` vs `<case>_ct.png` (coronal similar; sagittal smeared).
 
 ## Step 7 - diffusion training pairs (`07_build_roi_dataset.py`)
 * PASS: pairs written (train / val split by patient).
+* PASS: the condition keeps the prism's total attenuation (sum of mu, condition / CT, median 0.85-1.15).
+  DTS measures each column's attenuation well, so a low ratio means the background subtraction is
+  wrong (this check caught the depth-smear bug: 0.67-0.81 on real LIDC before the fix).
 * INFO: PSNR of the physics-only condition vs CT -- **the bar the diffusion model must beat**.
 * Figures: `pair_*.png` (condition = blurry / smeared, target = crisp CT).
 
