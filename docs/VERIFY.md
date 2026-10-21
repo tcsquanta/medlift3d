@@ -12,7 +12,7 @@ and writes `outputs/<step>/verification.md` + `verification.json` and figures. A
 code check means something is wrong: stop and look before continuing. Lines starting with
 **H1-H4** are *scientific results*, not code checks; they may honestly come out either way.
 
-Run the unit tests any time: `python -m pytest -q` (42 tests, about 5-10 min on CPU).
+Run the unit tests any time: `python -m pytest -q` (45 tests, about 5-10 min on CPU).
 
 ## Step 0 - environment (`00_check_env.py`)
 * PASS: torch, numpy, scipy, scikit-image, matplotlib, yaml, pydicom import; pylidc database has 1018 scans.

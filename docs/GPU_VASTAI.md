@@ -29,6 +29,34 @@ rented machine first: it prints the projector speed, and step 8 prints its `s/st
 limit is too small for the DICOM download, and its 12 h session limit is short for step 8.
 Use Kaggle or your laptop only for the smoke test and code checks.
 
+## Kaggle (free): environment check + 10-patient pilot, before paying for Vast.ai
+
+Notebook settings: Accelerator **GPU** (T4 or P100), **Internet on** (needs a verified phone number).
+Ten patients (~1.1 GB of DICOM) fit easily in `/kaggle/working`. Paste into cells:
+
+```bash
+!git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+%cd medlift3d
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+!python scripts/00_check_env.py                       # GPU listed? projector speed?
+!python -m pytest -q                                  # 45 tests, all must pass
+!python scripts/02_select_lidc.py --n-patients 10
+!python scripts/03_download_lidc.py --workers 4
+!python scripts/04_prepare_cases.py --source lidc
+!python scripts/05_simulate_dts.py
+!python scripts/06_reconstruct_sirt.py
+!python scripts/07_build_roi_dataset.py --jitter 1 --negatives 1
+!python scripts/08_train_diffusion.py --tiny          # GPU sanity run; note its s/step
+!python scripts/09_run_pipeline.py --methods sirt_coarse roi_sirt roi_gs --limit 10
+```
+
+Check: every step ends `ALL PASS` (step 7: "condition keeps the prism's attenuation" ~0.99),
+the figures in `outputs/04_cases` (contours on the nodules) and `outputs/07_roi_dataset`.
+Physics-only methods miss many small nodules on real data (the depth smear leaves them only
+~60 HU above the lung): that is a result, not a bug -- it is what the diffusion prior is for.
+Then do the full run on Vast.ai below (keep all data on one machine: moving ~30 GB of DICOM and
+intermediate files between Kaggle and Vast.ai costs more time than it saves money).
+
 ## Vast.ai checklist
 
 1. **Instance:** RTX 4090 (or A100 40 GB), >= 32 GB RAM, **>= 150 GB disk**, reliability > 99%,
