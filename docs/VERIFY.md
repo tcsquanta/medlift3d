@@ -100,7 +100,7 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * `python scripts/12_demo_app.py --share` -> public link for the defense.
 
 ## Smoke test (`smoke_test.py`)
-Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~70 min on 4 cores) and prints one table.
+Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~45 min on 4 cores) and prints one table.
 "SCIENCE-FAIL" lines are expected at this scale (tiny model trained for minutes on 2-3 mm voxels;
 H1, H2, H3b and H4 typically fail there); any plain "FAIL" or a crashed step is a real problem.
 Expected last line: `steps run: 11, crashed: none, code checks failed: 0, ...`.
