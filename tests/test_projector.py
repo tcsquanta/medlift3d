@@ -168,3 +168,20 @@ def test_local_change_projection_matches_full_projection():
     P = Projector(vg)
     full = np.stack([P(torch.as_tensor(f), *geom.rays([v])).reshape(120, 120).numpy() for v in range(geom.n_views)])
     assert np.abs(local - full).max() < 1e-5 and full.max() > 0.05
+
+
+def test_prism_covers_deep_nodules():
+    """The prism starts at the detector, but is shifted back so a deep nodule's box stays inside."""
+    from medlift3d.geometry import DTSGeometry
+    from medlift3d.roi import ROI
+
+    geom = DTSGeometry(detector_to_iso=150.0)                  # detector plane at y = -150
+    rcfg = {"size_vox": [16, 128, 16], "voxel_mm": [1.0, 2.0, 1.0], "box_mm": [40.0, 50.0, 40.0]}
+    for depth in (60.0, 200.0, 260.0, 300.0):                  # nodule depth in front of the detector (mm)
+        click = (0.0, geom.det_y + depth, 0.0)
+        roi = ROI.from_config(click, rcfg, geom)
+        lo, hi = roi.vgeom.box_min[1], roi.vgeom.box_max[1]
+        assert lo >= geom.det_y                                # never behind the detector
+        assert lo <= click[1] - 25.0 and hi >= click[1] + 25.0  # nodule box inside the prism
+        if depth <= 200.0:
+            assert abs(roi.y_start - (geom.det_y + 5.0)) < 1e-9  # usual case: unchanged

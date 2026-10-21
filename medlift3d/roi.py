@@ -42,12 +42,15 @@ class ROI:
     def from_config(cls, click, rcfg: dict, geom: Optional[DTSGeometry] = None) -> "ROI":
         size = tuple(int(s) for s in rcfg["size_vox"])
         vox = tuple(float(v) for v in rcfg["voxel_mm"])
+        box = tuple(float(b) for b in rcfg.get("box_mm", (40.0, 50.0, 40.0)))
         if geom is not None:
             y0 = geom.det_y + float(rcfg.get("depth_start_mm", 5.0))
+            # deep (posterior) nodule in a thick chest: shift the prism back so the nodule box
+            # (+10 mm) stays inside; the anterior tissue it leaves out becomes background
+            y0 = max(y0, float(click[1]) + 0.5 * box[1] + 10.0 - size[1] * vox[1])
         else:                                           # no geometry: centre the prism on the click
             y0 = float(click[1]) - 0.5 * size[1] * vox[1]
-        return cls(tuple(float(c) for c in click), size, vox, float(y0),
-                   tuple(float(b) for b in rcfg.get("box_mm", (40.0, 50.0, 40.0))))
+        return cls(tuple(float(c) for c in click), size, vox, float(y0), box)
 
     # ---------------------------------------------------------------- prism
     @property
