@@ -107,3 +107,21 @@ conformal prediction in CT" -- all exist.
   figures from `outputs/*/`.
 * Chapter 5 P4: remove "3DGS has not been applied to medical imaging" (false).
 * Chapter 6: limitations above.
+
+## 8. Plan to the Oct 30 deadline
+
+| date | work | who |
+|---|---|---|
+| Oct 21-22 | `pytest` + `smoke_test.py` on a laptop / Kaggle (CPU is fine); read `docs/VERIFY.md` | all |
+| Oct 22 | rent Vast.ai RTX 4090; steps 0-4 (select 200 patients, download ~22 GB, build cases) | Foyez |
+| Oct 23 | steps 5-7 (DTS simulation, SIRT, training pairs); check every PASS/FAIL and figure | Foyez + Motasim |
+| Oct 23-24 | step 8: diffusion training (~3-4 h; watch the nodule-box PSNR line) | Jubair |
+| Oct 24-25 | steps 9-11: all methods, evaluation, growth experiment (~4-5 h GPU) | Jubair + Foyez |
+| Oct 25 | download `outputs/` + results; destroy the instance | Foyez |
+| Oct 26-27 | demo (`12_demo_app.py --share`), figures for slides | Motasim |
+| Oct 27-29 | report: Ch.1.3 objectives, Ch.3 method, Ch.4 results (tables from `outputs/10_evaluation`, `outputs/11_growth`), Ch.6 limitations; slides | all |
+| Oct 30 | rehearsal / buffer | all |
+
+If step 8 is late, `09_run_pipeline.py --methods sirt_coarse roi_sirt roi_gs` still produces the
+physics-only results (H1, H3, H4 with physics methods), and the diffusion rows are added when
+the model is ready.

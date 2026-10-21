@@ -164,7 +164,10 @@ def main():
     else:
         amp = args.amp
     dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(amp)
-    scaler = torch.amp.GradScaler("cuda", enabled=(amp == "fp16" and use_cuda))
+    try:
+        scaler = torch.amp.GradScaler("cuda", enabled=(amp == "fp16" and use_cuda))
+    except (AttributeError, TypeError):                      # torch < 2.3
+        scaler = torch.cuda.amp.GradScaler(enabled=(amp == "fp16" and use_cuda))
     ck.info("device / precision / batch", f"{dev} / {amp} / {bs}")
     loader = DataLoader(train_ds, batch_size=bs, shuffle=True, drop_last=len(train_ds) >= bs,
                         num_workers=0 if args.tiny else args.workers, pin_memory=use_cuda, persistent_workers=False)
