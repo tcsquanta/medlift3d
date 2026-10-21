@@ -80,14 +80,24 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * H1-H3 result lines (scientific). Intervals need >= 19 calibration nodules for 90% asymmetric intervals.
 
 ## Step 11 - growth (`11_growth_experiment.py`)
-* PASS: virtual growth exact on CT (mass ratio within 10% of s^3).
-* `table_growth.md`: category accuracy (NELSON) and doubling-time error for VDT vs MDT; H4 line.
+* PASS: virtual growth construction exact (added mass = (s^3 - 1) x nodule mass, < 3%; typical 0.2%).
+* `table_growth.md`: category accuracy (NELSON), doubling-time error, false growth alarms and
+  **not measurable** (a scan where the method found no nodule; counted as a wrong category,
+  never as fast growth) for VDT vs MDT.
+* H4 line: MDT category accuracy >= VDT, and most pairs must be measurable.
+* `--limit` is the total number of nodules: re-running with the same limit only rebuilds the tables.
 
 ## Step 12 - demo (`12_demo_app.py`)
-* `--selftest`: loads a case, analyses a nodule, builds the 3D mesh, simulates a follow-up, builds the UI.
+* `--selftest`: loads a case, analyses a nodule, builds the 3D mesh, simulates a follow-up, builds the
+  UI and clicks through it (9 checks). `INFO method used` says which method produced the result: if the
+  diffusion model finds no nodule at a click, the demo shows the physics-only result and says so.
+* Intervals are "calibrated 90%" after step 10 with >= 19 calibration nodules, otherwise labelled
+  "uncalibrated +-2 sd".
 * `python scripts/12_demo_app.py --share` -> public link for the defense.
 
 ## Smoke test (`smoke_test.py`)
-Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~45-90 min) and prints one table.
-"SCIENCE-FAIL" lines are expected at this scale (tiny model trained for minutes); any plain
-"FAIL" or a crashed step is a real problem.
+Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~70 min on 4 cores) and prints one table.
+"SCIENCE-FAIL" lines are expected at this scale (tiny model trained for minutes on 2-3 mm voxels;
+H1, H2, H3b and H4 typically fail there); any plain "FAIL" or a crashed step is a real problem.
+Expected last line: `steps run: 11, crashed: none, code checks failed: 0, ...`.
+Re-run single steps with `--only 09 10`.

@@ -5,7 +5,7 @@
 | step | script | needs | RTX 4090 (24 GB) estimate | free Kaggle T4 (16 GB) | CPU only |
 |---|---|---|---|---|---|
 | 0-1 | check env, physics checks | anything | 1 min | 2 min | 2-3 min |
-| smoke test | `smoke_test.py` | anything (CPU fine) | 10 min | 20 min | 45-90 min |
+| smoke test | `smoke_test.py` | anything (CPU fine) | 10 min | 20 min | measured: 71 min (4 cores) |
 | 2 | select LIDC cases (annotations only) | CPU | 2-4 min | 2-4 min | 2-4 min |
 | 3 | download ~200 LIDC series (~22 GB) | **disk + bandwidth** | 30-90 min (TCIA speed) | disk limit is tight | measured: 4 series (0.45 GB) in 30 s |
 | 4 | DICOM -> cases | CPU / RAM | 40-80 min | 40-80 min | measured: ~23 s per case |
