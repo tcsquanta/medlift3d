@@ -35,7 +35,8 @@ python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic ph
 
 Each script prints **PASS / FAIL** checks and saves figures in `outputs/<step>/`
 (what to look for: [`docs/VERIFY.md`](docs/VERIFY.md)). GPU needs and times per step:
-[`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md).
+[`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md). Steps 5, 6, 7, 9 and 11 accept `--cases <case_id> ...` to (re)run
+only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0012_457842 --overwrite`.
 
 | step | command | what it does |
 |---|---|---|

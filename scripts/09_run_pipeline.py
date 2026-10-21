@@ -10,7 +10,7 @@ work/results/pipeline.jsonl (safe to interrupt and resume).
 """
 import os
 
-from _common import base_parser, setup
+from _common import base_parser, pick_cases, setup
 
 import numpy as np
 import torch
@@ -53,7 +53,7 @@ def main():
     res_path = args.results or paths.p("results", "pipeline.jsonl")
     done = {(r["case_id"], r["nodule_index"]) for r in read_jsonl(res_path)}
     splits = load_json(paths.p("splits.json"))
-    ids = sorted(c for c, s in splits["cases"].items() if s in args.splits)
+    ids = pick_cases(sorted(c for c, s in splits["cases"].items() if s in args.splits), args)
     n_done, n_fail, times, figs = 0, 0, [], 0
     for cid in ids:
         if not (os.path.exists(paths.dts(cid)) and os.path.exists(paths.sirt(cid))):

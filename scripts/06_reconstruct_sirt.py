@@ -10,7 +10,7 @@ training-free candidate detector finds the radiologists' nodules.
 """
 import os
 
-from _common import base_parser, setup
+from _common import base_parser, pick_cases, setup
 
 import numpy as np
 import torch
@@ -47,7 +47,8 @@ def main():
     out = paths.out("06_sirt")
     ck = Checker("Step 6: coarse DTS reconstruction (SIRT) + candidate detection")
     mu_w = cfg["physics"]["mu_water"]
-    ids = paths.case_ids()[: args.limit] if args.limit else paths.case_ids()
+    ids = pick_cases(paths.case_ids(), args)
+    ids = ids[: args.limit] if args.limit else ids
     res_drop, ratios, ranks, done = [], [], [], 0
     cand_all = {}
     for k, cid in enumerate(ids, 1):

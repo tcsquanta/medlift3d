@@ -9,7 +9,7 @@ integrals, every nodule's projected position, nodule contrast-to-noise.
 """
 import os
 
-from _common import base_parser, setup
+from _common import base_parser, pick_cases, setup
 
 import numpy as np
 import torch
@@ -50,7 +50,8 @@ def main():
     ck = Checker("Step 5: DTS simulation")
     mu_w = cfg["physics"]["mu_water"]
     i0 = cfg["simulation"]["i0"]
-    ids = paths.case_ids()[: args.limit] if args.limit else paths.case_ids()
+    ids = pick_cases(paths.case_ids(), args)
+    ids = ids[: args.limit] if args.limit else ids
     pmax, starve, cnrs, done = [], [], [], 0
     for k, cid in enumerate(ids, 1):
         if os.path.exists(paths.dts(cid)) and not args.overwrite:

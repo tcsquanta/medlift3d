@@ -15,7 +15,7 @@ import copy
 import math
 import os
 
-from _common import base_parser, setup
+from _common import base_parser, pick_cases, setup
 
 import numpy as np
 import torch
@@ -93,7 +93,7 @@ def main():
     res_path = paths.p("results", "growth.jsonl")
     done = {(r["case_id"], r["nodule_index"], r["interval_days"], r["true_dt_days"]) for r in read_jsonl(res_path)}
     splits = load_json(paths.p("splits.json"))
-    ids = sorted(c for c, s in splits["cases"].items() if s in args.splits)
+    ids = pick_cases(sorted(c for c, s in splits["cases"].items() if s in args.splits), args)
     combos = [(float(dt), float(DT)) for dt in cfg["growth"]["interval_days"] for DT in cfg["growth"]["doubling_days"]]
     n_nod = 0
     gt_ratio_err = []

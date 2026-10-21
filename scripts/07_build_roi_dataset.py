@@ -15,7 +15,7 @@ model has to beat), preview montage.
 """
 import os
 
-from _common import base_parser, setup
+from _common import base_parser, pick_cases, setup
 
 import numpy as np
 import torch
@@ -68,7 +68,7 @@ def main():
     rng_v = np.random.default_rng(cfg["seed"])
     val_pats = set(rng_v.choice(train_pats, size=max(1, int(round(args.val_frac * len(train_pats)))), replace=False))
     mu_w = cfg["physics"]["mu_water"]
-    ids = [c for c, s in splits["cases"].items() if s == "train"]
+    ids = pick_cases([c for c, s in splits["cases"].items() if s == "train"], args)
     ids = ids[: args.limit] if args.limit else ids
     counts = {"train": 0, "val": 0}
     ps_c, previews = [], []
