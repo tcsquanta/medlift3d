@@ -76,6 +76,9 @@ def main():
             viz.save_projection_montage(os.path.join(out, f"{cid}_views.png"), noisy.cpu().numpy(),
                                         np.stack([rows[:, 0], cols[:, 0]], -1),
                                         f"{cid}: 15 low-dose views (red: nodule 1 predicted position)")
+            viz.save_parallax_figure(os.path.join(out, f"{cid}_parallax.png"), noisy.cpu().numpy(),
+                                     np.stack([rows[:, 0], cols[:, 0]], -1),
+                                     f"{cid}: the views differ by depth-dependent shifts (parallax)")
     if done == 0:
         ck.info("nothing to do", "all cases already simulated (use --overwrite)")
     else:

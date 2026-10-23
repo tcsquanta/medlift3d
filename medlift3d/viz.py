@@ -91,6 +91,37 @@ def save_projection_montage(path: str, proj: np.ndarray, marks: Optional[np.ndar
     return _save(fig, path)
 
 
+def save_parallax_figure(path: str, proj: np.ndarray, marks: np.ndarray, title: str = "", half_px: int = 60) -> str:
+    """Why the 15 views look alike but are not: the first / central / last view zoomed on the
+    nodule (fixed window, red = predicted nodule position -- it moves against the ribs), and the
+    full first and last views with their difference (only depth-dependent shifts survive)."""
+    V = proj.shape[0]
+    pick = [0, V // 2, V - 1]
+    r0, c0 = (int(round(v)) for v in marks[V // 2])
+    lo, hi = np.percentile(proj, [1, 99.5])
+    fig, ax = plt.subplots(2, 3, figsize=(11, 7.5))
+    for k, v in enumerate(pick):
+        a = ax[0, k]
+        a.imshow(proj[v], cmap="gray", vmin=lo, vmax=hi)
+        a.plot(marks[v, 1], marks[v, 0], "o", mfc="none", mec="r", ms=14, mew=1.5)
+        a.axhline(r0, color="c", lw=0.6, ls="--")                 # fixed reference: centre-view position
+        a.set_xlim(c0 - half_px, c0 + half_px)
+        a.set_ylim(r0 + half_px, r0 - half_px)
+        a.set_title(f"view {v} (zoom); nodule row {marks[v, 0]:.0f}", fontsize=8)
+        a.axis("off")
+    for k, v in enumerate([0, V - 1]):
+        ax[1, k].imshow(proj[v], cmap="gray", vmin=lo, vmax=hi)
+        ax[1, k].set_title(f"view {v} (full)", fontsize=8)
+        ax[1, k].axis("off")
+    d = proj[V - 1] - proj[0]
+    m = float(np.percentile(np.abs(d), 99))
+    ax[1, 2].imshow(d, cmap="RdBu_r", vmin=-m, vmax=m)
+    ax[1, 2].set_title(f"view {V - 1} - view 0: edges shift by depth", fontsize=8)
+    ax[1, 2].axis("off")
+    fig.suptitle(title, fontsize=10)
+    return _save(fig, path)
+
+
 def save_curve(path: str, ys: Dict[str, Sequence[float]], title: str, xlabel: str = "iteration",
                ylabel: str = "", logy: bool = False) -> str:
     fig, a = plt.subplots(figsize=(5.5, 3.6))

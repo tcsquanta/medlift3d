@@ -55,6 +55,8 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * PASS: line integrals physical (max < 15); median nodule contrast-to-noise in one view > 1.
 * Real example (LIDC-IDRI-0012): max line integral 6.83, median nodule CNR 3.5.
 * Figures: `<case>_views.png` -- radiograph-like views, red circle on the nodule in every view.
+  The 15 views look alike (only +-15 deg apart); `<case>_parallax.png` shows how they differ: the
+  nodule moves against the ribs / diaphragm by an amount set by its depth (what DTS reconstructs from).
 
 ## Step 6 - coarse SIRT (`06_reconstruct_sirt.py`)
 * The volume is confined in depth to the patient (detector to back; `support_y` recorded by step 5).
