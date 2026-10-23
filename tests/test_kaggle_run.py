@@ -22,3 +22,11 @@ def test_dry_run_lists_every_step_in_order():
                                                           "06_reconstruct", "07_build", "08_train")]
     assert order == sorted(order)
     assert "--n-patients 7" in out.stdout and "--max-hours 7.100" in out.stdout and "--amp fp16" in out.stdout
+
+
+def test_dry_run_uses_both_kaggle_gpus():
+    out = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "kaggle_run.py"), "--dry-run", "--gpus", "2"],
+                         capture_output=True, text=True, cwd=ROOT, timeout=120)
+    assert out.returncode == 0, out.stderr
+    line = [l for l in out.stdout.splitlines() if "08_train" in l][0]
+    assert "-m torch.distributed.run --standalone --nproc_per_node 2" in line

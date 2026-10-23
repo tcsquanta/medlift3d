@@ -39,6 +39,8 @@ def main():
     ap.add_argument("--sample-every", type=int, default=1000, help="step 8 validation / checkpoint interval")
     ap.add_argument("--min-train-hours", type=float, default=2.0, help="refuse to train if less than this is left")
     ap.add_argument("--keep-dicom", action="store_true", help="keep the DICOM files (default: delete after step 4)")
+    ap.add_argument("--gpus", type=int, default=None,
+                    help="GPUs for step 8 (default: all visible, e.g. 2 on Kaggle 'GPU T4 x2')")
     ap.add_argument("--resume-training", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the plan, run nothing")
     args = ap.parse_args()
@@ -46,12 +48,12 @@ def main():
     t0 = time.time()
     py = sys.executable
 
-    def run(*cmd) -> None:
-        line = " ".join([os.path.relpath(cmd[0], ROOT)] + [str(c) for c in cmd[1:]])
+    def run(*cmd, launcher=()) -> None:
+        line = " ".join([*launcher, os.path.relpath(cmd[0], ROOT)] + [str(c) for c in cmd[1:]])
         print(f"\n##### [{(time.time() - t0) / 3600:.2f} h] python {line}", flush=True)
         if args.dry_run:
             return
-        code = subprocess.call([py, "-u", *[str(c) for c in cmd]], cwd=ROOT)
+        code = subprocess.call([py, "-u", *launcher, *[str(c) for c in cmd]], cwd=ROOT)
         if code != 0:
             sys.exit(f"step failed with exit code {code}: {line}")
 
@@ -81,7 +83,15 @@ def main():
            "--amp", args.amp, "--sample-every", args.sample_every]
     if args.resume_training:
         cmd.append("--resume")
-    run(*cmd)
+    gpus = args.gpus
+    if gpus is None:
+        import torch
+
+        gpus = torch.cuda.device_count()
+    # several GPUs: one training process per GPU (DistributedDataParallel), --batch-size samples each
+    launcher = ("-m", "torch.distributed.run", "--standalone", "--nproc_per_node", str(gpus)) if gpus > 1 else ()
+    print(f"step 8 on {max(gpus, 1)} {'GPU' if gpus else 'CPU'} process(es)", flush=True)
+    run(*cmd, launcher=launcher)
     print("\nDone. Checkpoints: work/models/diffusion/best.pt (best nodule-box gain) and last.pt.\n"
           "Demo: python scripts/12_demo_app.py --share", flush=True)
 

@@ -14,17 +14,28 @@ model and logs PSNR(sample, CT) next to PSNR(condition, CT); the run is
 healthy when the first number rises above the second. Checkpoints:
 work/models/diffusion/{last.pt, best.pt}; log: train_log.csv; figures in
 outputs/08_diffusion/.
+
+Several GPUs (e.g. Kaggle "GPU T4 x2"): launch with torchrun; each GPU gets
+--batch-size samples per step (DistributedDataParallel), validation and
+checkpoints run on the first GPU:
+
+    torchrun --standalone --nproc_per_node 2 scripts/08_train_diffusion.py --batch-size 4 --amp fp16
 """
 import csv
+import datetime
 import math
 import os
+import sys
 import time
 
 from _common import base_parser, setup
 
 import numpy as np
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from medlift3d.diffusion import EMA, GaussianDiffusion, unit_to_hu
 from medlift3d.diffusion.checkpoint import build_model, save_checkpoint
@@ -36,10 +47,14 @@ from medlift3d.utils import Checker
 from medlift3d import viz
 
 
-def infinite(loader):
+def infinite(loader, sampler=None):
+    epoch = 0
     while True:
+        if sampler is not None:
+            sampler.set_epoch(epoch)                     # new shuffle every pass, same on every GPU
         for b in loader:
             yield b
+        epoch += 1
 
 
 def tiny_pairs(n=6, size=32, seed=0):
@@ -119,6 +134,20 @@ def main():
     ap.add_argument("--tiny", action="store_true", help="CPU-sized sanity run on synthetic pairs")
     args = ap.parse_args()
     cfg, dev = setup(args)
+    world, rank = int(os.environ.get("WORLD_SIZE", "1")), int(os.environ.get("RANK", "0"))
+    if world > 1:                                        # launched by torchrun: one process per GPU
+        local = int(os.environ.get("LOCAL_RANK", "0"))
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local)
+            dev = torch.device("cuda", local)
+        else:
+            dev = torch.device("cpu")
+        dist.init_process_group("nccl" if dev.type == "cuda" else "gloo", timeout=datetime.timedelta(minutes=60))
+        torch.manual_seed(int(cfg["seed"]) + rank)      # different diffusion noise per GPU (weights: rank 0's)
+        np.random.seed(int(cfg["seed"]) + rank)
+        if rank != 0:
+            sys.stdout = open(os.devnull, "w")           # one log, from the first GPU
+    main_proc = rank == 0
     paths = Paths(cfg)
     dcfg = dict(cfg["diffusion"])
     out = paths.out("08_diffusion" + ("_tiny" if args.tiny else ""))
@@ -171,13 +200,19 @@ def main():
         scaler = torch.amp.GradScaler("cuda", enabled=(amp == "fp16" and use_cuda))
     except (AttributeError, TypeError):                      # torch < 2.3
         scaler = torch.cuda.amp.GradScaler(enabled=(amp == "fp16" and use_cuda))
-    ck.info("device / precision / batch", f"{dev} / {amp} / {bs}")
-    loader = DataLoader(train_ds, batch_size=bs, shuffle=True, drop_last=len(train_ds) >= bs,
-                        num_workers=0 if args.tiny else args.workers, pin_memory=use_cuda, persistent_workers=False)
-    it = infinite(loader)
+    ck.info("device / precision / batch", f"{dev} / {amp} / {bs} per GPU x {world} GPU(s)")
+    net = model
+    if world > 1:
+        net = DistributedDataParallel(model, device_ids=[dev.index] if dev.type == "cuda" else None)
+    sampler = DistributedSampler(train_ds, num_replicas=world, rank=rank, shuffle=True) if world > 1 else None
+    workers = 0 if args.tiny else max(1, min(args.workers, (os.cpu_count() or 2) // world))
+    loader = DataLoader(train_ds, batch_size=bs, shuffle=sampler is None, sampler=sampler,
+                        drop_last=len(train_ds) >= bs * world, num_workers=workers, pin_memory=use_cuda,
+                        persistent_workers=False)
+    it = infinite(loader, sampler)
     log_path = os.path.join(mdir, "train_log.csv")
     new_log = not (args.resume and os.path.exists(log_path))
-    logf = open(log_path, "w" if new_log else "a", newline="")
+    logf = open(log_path if main_proc else os.devnull, "w" if new_log else "a", newline="")
     logw = csv.writer(logf)
     if new_log:
         logw.writerow(["step", "loss", "lr", "sec_per_step", "val_psnr_sample", "val_psnr_condition"])
@@ -196,7 +231,7 @@ def main():
         for gparam in opt.param_groups:
             gparam["lr"] = cur_lr
         with torch.autocast(device_type=dev.type, dtype=dtype, enabled=dtype is not None):
-            loss = diffusion.loss(model, tgt, cond)
+            loss = diffusion.loss(net, tgt, cond)
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
@@ -217,9 +252,13 @@ def main():
             logw.writerow([step, ml, cur_lr, dt, "", ""])
             logf.flush()
         out_of_time = args.max_hours is not None and time.perf_counter() - t_start >= 3600.0 * args.max_hours
+        if world > 1 and args.max_hours is not None:     # all GPUs must stop at the same step
+            flag = torch.tensor([1.0 if out_of_time else 0.0], device=dev)
+            dist.broadcast(flag, 0)
+            out_of_time = bool(flag.item())
         if out_of_time:
             print(f"time budget of {args.max_hours:g} h reached at step {step}: evaluating, saving, stopping")
-        if step % args.sample_every == 0 or step == steps or out_of_time:
+        if main_proc and (step % args.sample_every == 0 or step == steps or out_of_time):
             ps, pc, vis, (bxs, bxc) = evaluate(ema.shadow, diffusion, val_items, sample_steps, dev,
                                                start_frac=float(dcfg.get("start_frac", 1.0)), box_half_vox=box_half)
             hist_s.append(ps)
@@ -246,6 +285,11 @@ def main():
         if out_of_time:
             break
     logf.close()
+    if world > 1:
+        dist.barrier()                                   # wait for the first GPU's last validation
+        dist.destroy_process_group()
+        if not main_proc:
+            return
     viz.save_curve(os.path.join(out, "loss.png"), {"loss": np.convolve(losses, np.ones(min(50, len(losses))) / min(50, len(losses)), mode="valid")},
                    "diffusion training loss (moving average)", "step", "MSE(eps)", logy=True)
     k = max(1, len(losses) // 10)

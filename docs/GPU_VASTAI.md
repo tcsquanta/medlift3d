@@ -64,8 +64,9 @@ left (step 8 stops itself at its budget, after validating and saving `best.pt` /
 Training is *not* the full 40,000-step recipe: a T4 reaches maybe 10-20k steps in ~7 h (measure it:
 the log prints `s/step`), which is enough to see whether the model beats the physics-only input.
 
-**1. Train (background, survives a closed tab).** New notebook, Accelerator **GPU**, Internet **On**,
-then two cells:
+**1. Train (background, survives a closed tab).** New notebook, Accelerator **GPU T4 x2**, Internet **On**,
+then two cells (with two GPUs step 8 trains on both automatically -- one process per GPU,
+`--batch-size` samples each; expected ~1.7-1.9x the speed of one T4, not measured; the log says `x 2 GPU(s)`):
 
 ```bash
 !git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
