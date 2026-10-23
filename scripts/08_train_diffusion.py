@@ -113,6 +113,9 @@ def main():
     ap.add_argument("--sample-every", type=int, default=2000)
     ap.add_argument("--n-val", type=int, default=4)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--max-hours", type=float, default=None,
+                    help="stop after this many hours of training (evaluates + saves first); the learning rate "
+                         "is constant after warm-up, so stopping early loses nothing")
     ap.add_argument("--tiny", action="store_true", help="CPU-sized sanity run on synthetic pairs")
     args = ap.parse_args()
     cfg, dev = setup(args)
@@ -183,7 +186,7 @@ def main():
     vsp = np.asarray(cfg["roi"]["voxel_mm"], float)[::-1]                              # (z, y, x)
     box_half = None if args.tiny else (np.asarray(cfg["roi"].get("box_mm", (40, 50, 40)), float)[::-1] / vsp / 2.0)
     best = -1e9
-    t_last = time.perf_counter()
+    t_start = t_last = time.perf_counter()
     model.train()
     for step in range(start + 1, steps + 1):
         cond, tgt = next(it)
@@ -207,20 +210,26 @@ def main():
             t_last = time.perf_counter()
             ml = float(np.mean(losses[-args.log_every:]))
             eta_h = dt * (steps - step) / 3600
-            print(f"step {step}/{steps}  loss {ml:.4f}  lr {cur_lr:.2e}  {dt:.3f}s/step  ETA {eta_h:.2f} h")
+            if args.max_hours is not None:                       # the time budget ends the run, not --steps
+                eta_h = max(0.0, args.max_hours - (time.perf_counter() - t_start) / 3600)
+            print(f"step {step}/{steps}  loss {ml:.4f}  lr {cur_lr:.2e}  {dt:.3f}s/step  "
+                  f"{'time left' if args.max_hours is not None else 'ETA'} {eta_h:.2f} h")
             logw.writerow([step, ml, cur_lr, dt, "", ""])
             logf.flush()
-        if step % args.sample_every == 0 or step == steps:
-            ps, pc, vis, (bs, bc) = evaluate(ema.shadow, diffusion, val_items, sample_steps, dev,
-                                             start_frac=float(dcfg.get("start_frac", 1.0)), box_half_vox=box_half)
+        out_of_time = args.max_hours is not None and time.perf_counter() - t_start >= 3600.0 * args.max_hours
+        if out_of_time:
+            print(f"time budget of {args.max_hours:g} h reached at step {step}: evaluating, saving, stopping")
+        if step % args.sample_every == 0 or step == steps or out_of_time:
+            ps, pc, vis, (bxs, bxc) = evaluate(ema.shadow, diffusion, val_items, sample_steps, dev,
+                                               start_frac=float(dcfg.get("start_frac", 1.0)), box_half_vox=box_half)
             hist_s.append(ps)
             hist_c.append(pc)
-            hist_bs.append(bs)
-            hist_bc.append(bc)
+            hist_bs.append(bxs)
+            hist_bc.append(bxc)
             logw.writerow([step, "", "", "", ps, pc])
             logf.flush()
             print(f"  [val] PSNR sample vs CT {ps:.2f} dB | condition vs CT {pc:.2f} dB"
-                  + (f"  || nodule box: sample {bs:.2f} dB | condition {bc:.2f} dB" if np.isfinite(bs) else ""))
+                  + (f"  || nodule box: sample {bxs:.2f} dB | condition {bxc:.2f} dB" if np.isfinite(bxs) else ""))
             c_hu, s_hu, t_hu = vis[0]
             from medlift3d.geometry import VolumeGeometry
 
@@ -230,9 +239,12 @@ def main():
                                {"condition": c_hu, "diffusion sample": s_hu, "CT": t_hu}, vg, vg.center,
                                title=f"step {step}: PSNR sample {ps:.1f} dB / condition {pc:.1f} dB")
             save_checkpoint(last_path, model, ema, opt, step, dcfg)
-            if ps > best:
-                best = ps
+            score = bxs - bxc if np.isfinite(bxs) else ps - pc        # gain over the condition, where it matters
+            if score > best:
+                best = score
                 save_checkpoint(os.path.join(mdir, "best.pt"), model, ema, opt, step, dcfg)
+        if out_of_time:
+            break
     logf.close()
     viz.save_curve(os.path.join(out, "loss.png"), {"loss": np.convolve(losses, np.ones(min(50, len(losses))) / min(50, len(losses)), mode="valid")},
                    "diffusion training loss (moving average)", "step", "MSE(eps)", logy=True)

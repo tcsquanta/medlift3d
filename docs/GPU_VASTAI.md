@@ -57,6 +57,49 @@ Physics-only methods miss many small nodules on real data (the depth smear leave
 Then do the full run on Vast.ai below (keep all data on one machine: moving ~30 GB of DICOM and
 intermediate files between Kaggle and Vast.ai costs more time than it saves money).
 
+## Kaggle: one 9-hour run (prepare + train), then the interactive demo
+
+`scripts/kaggle_run.py` runs steps 2-7 and then trains the diffusion model with all the time that is
+left (step 8 stops itself at its budget, after validating and saving `best.pt` / `last.pt`).
+Training is *not* the full 40,000-step recipe: a T4 reaches maybe 10-20k steps in ~7 h (measure it:
+the log prints `s/step`), which is enough to see whether the model beats the physics-only input.
+
+**1. Train (background, survives a closed tab).** New notebook, Accelerator **GPU**, Internet **On**,
+then two cells:
+
+```bash
+!git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+%cd medlift3d
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+!python scripts/kaggle_run.py --total-hours 9 --n-patients 40     # add --batch-size 2 if out of memory
+```
+
+Press **Save Version -> Save & Run All (Commit)**. Everything under `/kaggle/working` becomes the
+version's output (the DICOM files are deleted after step 4 to stay far below the 20 GB limit).
+Watch the log for `[val] ... nodule box: sample X dB | condition Y dB` every 1000 steps: the sample
+should rise above the condition. If the session dies early, add the output as input data, copy
+`work/models/diffusion/last.pt` back and run `kaggle_run.py --resume-training`.
+
+**2. Demo (interactive session, ~1 h).** New notebook with GPU + Internet, **Add Data -> Notebook
+Output Files** -> your committed notebook, then:
+
+```bash
+!git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+%cd medlift3d
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+!cp -r /kaggle/input/<your-notebook-name>/medlift3d/work work        # path: look in the input panel
+!python scripts/12_demo_app.py --selftest                           # must end ALL PASS
+!python scripts/12_demo_app.py --share                              # open the printed gradio.live link
+```
+
+In the demo pick a case, find the green circle (the radiologists' nodule), click it. If the model
+finds nothing at the click it says so and shows the physics-only result. Stop the session when done:
+it counts against your ~30 GPU hours per week. (The demo's mass numbers share the window problem
+described in the project notes for step 9; do not quote them as results yet.)
+
+This does not include steps 9-11 (evaluation tables, calibrated intervals, growth): they need a
+trained model and take hours on a T4, so run them on the rented GPU, or in a second session.
+
 ## Vast.ai checklist
 
 1. **Instance:** RTX 4090 (or A100 40 GB), >= 32 GB RAM, **>= 150 GB disk**, reliability > 99%,
