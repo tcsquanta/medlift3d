@@ -46,6 +46,7 @@ def main():
     args = ap.parse_args()
 
     t0 = time.time()
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")   # less fragmentation
     py = sys.executable
 
     def run(*cmd, launcher=()) -> None:

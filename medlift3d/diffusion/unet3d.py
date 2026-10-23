@@ -1,7 +1,7 @@
 """Time-conditioned 3D U-Net (DDPM style) for 64^3 ROIs.
 
 Input channels = [x_t, condition]; output = predicted noise epsilon.
-Default (base 32, mults 1-2-4-4, 2 res-blocks, attention at 8^3) has ~11M
+Default (base 32, mults 1-2-4-4, 2 res-blocks, attention at 8^3) has ~17M
 parameters and fits batch 4 at 64^3 in fp16/bf16 on a 16 GB GPU.
 """
 from __future__ import annotations

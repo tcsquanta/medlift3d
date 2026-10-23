@@ -43,7 +43,7 @@ from medlift3d.diffusion.dataset import RoiPairDataset
 from medlift3d.diffusion.unet3d import count_parameters
 from medlift3d.io import Paths
 from medlift3d.metrics import psnr
-from medlift3d.utils import Checker
+from medlift3d.utils import Checker, largest_fitting_batch
 from medlift3d import viz
 
 
@@ -200,6 +200,26 @@ def main():
         scaler = torch.amp.GradScaler("cuda", enabled=(amp == "fp16" and use_cuda))
     except (AttributeError, TypeError):                      # torch < 2.3
         scaler = torch.cuda.amp.GradScaler(enabled=(amp == "fp16" and use_cuda))
+    if use_cuda:                                         # shrink the batch until a training step fits the GPU
+        shape = tuple(train_ds[0][0].shape)
+
+        def try_step(b):
+            torch.cuda.reset_peak_memory_stats(dev)
+            x = torch.zeros((b, *shape), device=dev)
+            with torch.autocast(device_type="cuda", dtype=dtype, enabled=dtype is not None):
+                loss = diffusion.loss(model, x, x)
+            loss.backward()
+            model.zero_grad(set_to_none=True)
+            return torch.cuda.max_memory_allocated(dev) / torch.cuda.get_device_properties(dev).total_memory
+
+        fit = largest_fitting_batch(bs, try_step)
+        if world > 1:                                    # every GPU must use the same batch
+            t = torch.tensor([fit], device=dev)
+            dist.all_reduce(t, op=dist.ReduceOp.MIN)
+            fit = int(t.item())
+        if fit < bs:
+            print(f"batch per GPU reduced from {bs} to {fit} to fit in GPU memory")
+        bs = fit
     ck.info("device / precision / batch", f"{dev} / {amp} / {bs} per GPU x {world} GPU(s)")
     net = model
     if world > 1:

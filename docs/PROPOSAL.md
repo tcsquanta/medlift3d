@@ -59,7 +59,7 @@ Any of these can come out false. The report must state whichever results we actu
    is a small correction. Check (step 7): the prism keeps the column's total attenuation (ratio ~1).
    (A small 3D box fails: each ray's attenuation is mostly outside the box and the background error
    swamps the nodule. We measured a 73% relative error for the box vs 5-7% for the prism.)
-5. **Conditional 3D diffusion prior:** a 3D U-Net (~11M parameters, v-prediction, cosine schedule)
+5. **Conditional 3D diffusion prior:** a 3D U-Net (~17M parameters, v-prediction, cosine schedule)
    learns p(CT prism | DTS-SIRT prism) from training patients (nodule ROIs + nodule-free lung ROIs).
    DDIM sampling with **data consistency** (a few SIRT steps on every denoised estimate) gives
    K = 8 hypotheses that all agree with the X-rays but differ where the X-rays are blind (depth).

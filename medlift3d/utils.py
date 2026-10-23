@@ -103,3 +103,26 @@ def _fmt(v: Any) -> str:
     if isinstance(v, (list, tuple)) and v and all(isinstance(x, float) for x in v):
         return "[" + ", ".join(f"{x:.4g}" for x in v) + "]"
     return str(v)
+
+
+def largest_fitting_batch(batch: int, try_step, max_fraction: float = 0.9) -> int:
+    """Largest batch <= ``batch`` for which ``try_step(b)`` succeeds, halving on out-of-memory.
+
+    ``try_step(b)`` runs one forward + backward pass with batch ``b`` and returns the peak
+    fraction of GPU memory it used; above ``max_fraction`` also counts as too big (the real
+    step additionally holds optimizer state and suffers fragmentation).
+    """
+    oom_errors = tuple(e for e in (getattr(torch, "OutOfMemoryError", None),
+                                   getattr(torch.cuda, "OutOfMemoryError", None)) if e is not None)
+    b = int(batch)
+    while b >= 1:
+        try:
+            fits = try_step(b) <= max_fraction
+        except oom_errors:
+            fits = False
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if fits:
+            return b
+        b //= 2
+    raise RuntimeError("even a batch of 1 does not fit in GPU memory")

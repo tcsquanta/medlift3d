@@ -68,3 +68,20 @@ def test_ddim_sampler_shape_determinism_and_dc_hook():
     c = d.ddim_sample(m, cond, steps=10, eta=0.0, generator=torch.Generator().manual_seed(5), dc_fn=dc,
                       dc_start_frac=0.0)
     assert len(calls) == 10 and float(c.abs().max()) < 1e-5
+
+
+def test_largest_fitting_batch_halves_on_oom():
+    import torch
+    from medlift3d.utils import largest_fitting_batch
+
+    oom = getattr(torch, "OutOfMemoryError", None) or torch.cuda.OutOfMemoryError
+    tried = []
+
+    def try_step(b):                       # fake GPU: batch 4 runs out of memory, batch 2 uses 95%, 1 fits
+        tried.append(b)
+        if b >= 4:
+            raise oom("fake")
+        return 0.95 if b == 2 else 0.5
+
+    assert largest_fitting_batch(8, try_step) == 1 and tried == [8, 4, 2, 1]
+    assert largest_fitting_batch(2, lambda b: 0.3) == 2
