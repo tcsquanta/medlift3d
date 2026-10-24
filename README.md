@@ -27,7 +27,7 @@ nodule box --> mass (closed form) / volume (continuous field) --> conformal inte
 
 ```bash
 pip install -r requirements.txt          # on Kaggle / Vast.ai keep the preinstalled torch
-python -m pytest -q                      # 45 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
+python -m pytest -q                      # 51 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
 python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic phantoms (CPU, ~45 min on 4 cores)
 ```
 
@@ -35,7 +35,7 @@ python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic ph
 
 Each script prints **PASS / FAIL** checks and saves figures in `outputs/<step>/`
 (what to look for: [`docs/VERIFY.md`](docs/VERIFY.md)). GPU needs and times per step:
-[`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md). Steps 5, 6, 7, 9 and 11 accept `--cases <case_id> ...` to (re)run
+[`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md). Steps 5, 6, 7, 9, 11 and 13 accept `--cases <case_id> ...` to (re)run
 only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0012_457842 --overwrite`.
 
 | step | command | what it does |
@@ -53,6 +53,7 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 10 | `python scripts/10_evaluate.py` | accuracy tables, calibrated intervals, H1-H3 |
 | 11 | `python scripts/11_growth_experiment.py` | virtual follow-up scans: VDT vs MDT, H4 |
 | 12 | `python scripts/12_demo_app.py --share` | interactive click-to-3D demo (Gradio) |
+| 13 | `python scripts/13_geometry_sensitivity.py --limit 12` | same nodules with 60 views / a 40 deg sweep: how much the 15-view, 30 deg choice matters |
 
 ### Why LIDC-IDRI
 
@@ -65,7 +66,7 @@ patients (~22 GB instead of 133 GB). LUNA16 (same scans as `.mhd`) works too: `-
 
 ```
 medlift3d/            library
-  geometry.py         DTS geometry (15 views, +-15 deg, SID 1800 mm), voxel grids
+  geometry.py         DTS geometry (15 views, +-15 deg linear sweep, SID 1800 mm), voxel grids
   projector.py        differentiable ray-marching X-ray projector (pure PyTorch)
   simulate.py         CT -> DTS projections, Poisson noise, local-change projection
   sirt.py             SIRT reconstruction

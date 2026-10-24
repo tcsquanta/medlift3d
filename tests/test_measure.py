@@ -81,3 +81,22 @@ def test_segmentation_detaches_from_adjacent_structure_or_fails():
             assert 0.6 < mask.sum() / sphere.sum() < 1.4, mask.sum() / sphere.sum()
         else:
             assert info["touches_limit"] and not mask.any()
+
+
+def test_fwhm_and_depth_smear_metrics():
+    from medlift3d.geometry import VolumeGeometry
+    from medlift3d.measure import depth_smear_metrics, fwhm_1d
+
+    x = np.arange(101) - 50.0
+    g = np.exp(-x ** 2 / (2 * 4.0 ** 2))
+    assert abs(fwhm_1d(g, 50, 0.5) - 2.3548 * 4.0 * 0.5) < 0.05
+    assert math.isnan(fwhm_1d(np.ones(10), 5, 1.0))                  # never drops to half
+    # a Gaussian blob 3x longer in depth (y) than in-plane, on a lung background
+    vg = VolumeGeometry.centered((65, 65, 65), (1.0, 1.0, 1.0))           # voxel centre at 0
+    xs, ys, zs = vg.axes()
+    Z, Y, X = np.meshgrid(zs, ys, xs, indexing="ij")
+    vol = -850.0 + 300.0 * np.exp(-(X ** 2 + Z ** 2) / (2 * 2.0 ** 2) - Y ** 2 / (2 * 6.0 ** 2))
+    m = depth_smear_metrics(vol, vg, (0.0, 3.0, 0.0), -850.0)
+    assert abs(m["contrast_hu"] - 300.0 * 0.85) < 5.0                # 3 x 3 in-plane average: x (1 + 2 e^-1/8)^2 / 9
+    assert abs(m["depth_fwhm_mm"] / m["inplane_fwhm_mm"] - 3.0) < 0.3
+    assert m["clutter_hu"] < 1.0                                      # no anatomy around it

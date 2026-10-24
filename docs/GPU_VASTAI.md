@@ -17,6 +17,7 @@
 | 10 | evaluation tables / figures | CPU | 1 min | 1 min | 1 min |
 | **11** | growth experiment (40 nodules x 2 follow-ups) | **big GPU** | ~1.5-2 h | ~5 h | no |
 | 12 | Gradio demo | GPU nice, CPU OK | instant click (~30-60 s / nodule) | similar | 2-5 min / nodule |
+| 13 | geometry sensitivity (12 nodules x 4 geometries, physics only) | GPU | ~20-40 min | ~1-2 h | many hours |
 
 These GPU times are **estimates**, not measurements. The CPU numbers in this table are
 measured in this repo; the GPU numbers come from the FLOP count of the 3D U-Net (~0.5
@@ -39,7 +40,7 @@ Ten patients (~1.1 GB of DICOM) fit easily in `/kaggle/working`. Paste into cell
 %cd medlift3d
 !pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
 !python scripts/00_check_env.py                       # GPU listed? projector speed?
-!python -m pytest -q                                  # 45 tests, all must pass
+!python -m pytest -q                                  # 51 tests, all must pass
 !python scripts/02_select_lidc.py --n-patients 10
 !python scripts/03_download_lidc.py --workers 4
 !python scripts/04_prepare_cases.py --source lidc
@@ -101,6 +102,18 @@ described in the project notes for step 9; do not quote them as results yet.)
 This does not include steps 9-11 (evaluation tables, calibrated intervals, growth): they need a
 trained model and take hours on a T4, so run them on the rented GPU, or in a second session.
 
+**3. Geometry sensitivity (optional, ~1-2 h, needs only `work/cases`).** Same setup as the demo
+session (copy `work` from the input), then:
+
+```bash
+!python scripts/13_geometry_sensitivity.py --limit 12      # 15 vs 60 views, 30 vs 40 deg; prints ALL PASS
+!cat outputs/13_geometry/table_geometry.md
+```
+
+It re-simulates each patient 4 times (15, 60, 15 and 74 views; the log prints the simulation + SIRT
+time per case) and keeps the results in `work/results/geometry.jsonl`, so a stopped run continues
+where it left off.
+
 ## Vast.ai checklist
 
 1. **Instance:** RTX 4090 (or A100 40 GB), >= 32 GB RAM, **>= 150 GB disk**, reliability > 99%,
@@ -128,6 +141,7 @@ trained model and take hours on a T4, so run them on the rented GPU, or in a sec
    python scripts/09_run_pipeline.py --members 8
    python scripts/10_evaluate.py
    python scripts/11_growth_experiment.py --limit 40 --pairs-per-nodule 2
+   python scripts/13_geometry_sensitivity.py --limit 20                 # views / sweep angle sensitivity
    ```
 5. **Save results before destroying the instance** (storage keeps costing money):
    `outputs/` (all figures + tables), `work/results/*.jsonl`, `work/models/diffusion/best.pt`,

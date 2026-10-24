@@ -12,7 +12,7 @@ and writes `outputs/<step>/verification.md` + `verification.json` and figures. A
 code check means something is wrong: stop and look before continuing. Lines starting with
 **H1-H4** are *scientific results*, not code checks; they may honestly come out either way.
 
-Run the unit tests any time: `python -m pytest -q` (45 tests, about 5-10 min on CPU).
+Run the unit tests any time: `python -m pytest -q` (51 tests, about 5-10 min on CPU).
 
 ## Step 0 - environment (`00_check_env.py`)
 * PASS: torch, numpy, scipy, scikit-image, matplotlib, yaml, pydicom import; pylidc database has 1018 scans.
@@ -100,6 +100,22 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * Intervals are "calibrated 90%" after step 10 with >= 19 calibration nodules, otherwise labelled
   "uncalibrated +-2 sd".
 * `python scripts/12_demo_app.py --share` -> public link for the defense.
+
+## Step 13 - acquisition geometry (`13_geometry_sensitivity.py`)
+Our DTS uses 15 views over a 30 deg linear sweep: the angular range of the GE VolumeRAD chest unit, but
+fewer views than real units (60-74) to save compute, and Shimadzu units sweep up to 40 deg. This step
+re-simulates the same patients with other geometries (default 15x30, 60x30, 15x40, 74x40; equal total
+dose) and runs the physics-only methods on the same nodules.
+* PASS: no errors, every geometry has results, the nodule is on the detector in every view.
+* `table_geometry.md` (scientific, report it as it comes out):
+  - *views* (15x30 vs 60x30): the depth smear should barely change (it is set by the sweep angle);
+    contrast / clutter may change a little (fewer streaks).
+  - *angle* (15x30 vs 15x40): the depth smear should shrink, roughly with 1/sin(half sweep), i.e.
+    ~1.3x less at +-20 deg than at +-15 deg (much less in practice: the iterative reconstruction
+    and the prism support also limit the depth extent).
+  - mass error should depend much less on the geometry than volume error (H1 again).
+* Figures `<case>_n<j>_roi_sirt.png`: the same nodule's ROI-SIRT per geometry next to the CT.
+* Diffusion is not run here (trained on the 15x30 geometry only).
 
 ## Smoke test (`smoke_test.py`)
 Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~45 min on 4 cores) and prints one table.

@@ -46,6 +46,12 @@ Any of these can come out false. The report must state whichever results we actu
 2. **DTS simulation (virtual clinical trial):** the CT table is removed (largest body component),
    then 15 views, +-15 deg linear sweep, SID 1800 mm,
    43 cm flat panel (0.8 mm pixels), monochromatic attenuation, Poisson noise (I0 = 2e4/pixel).
+   Reference system: chest DTS units move the tube on a *linear* track with a stationary (GE VolumeRAD)
+   or counter-moving (Shimadzu SonialVision) detector; the angular range matches the GE VolumeRAD
+   (+-15 deg, as in published VolumeRAD simulation models; Shimadzu allows up to 40 deg). Real units take
+   60-74 views; we take 15 to save compute (every simulation / reconstruction step scales with the views).
+   Step 13 re-runs the physics-only methods with 60/74 views and a 40 deg sweep at equal total dose to
+   measure how much this choice matters. (Breast tomosynthesis uses 15-50 deg and arcs; not our setting.)
    Simulated at CT resolution with fine ray sampling; reconstructed on different grids (no inverse crime).
 3. **Standard DTS reconstruction:** coarse whole-chest SIRT (2.5 mm), confined in depth to the patient
    (between the detector and the back, from the patient thickness that a DTS unit measures at acquisition;
@@ -119,6 +125,10 @@ Measured with the pipeline before the GPU run (useful for Ch.4 / the defense):
 ## 6. Limitations (state them in the report)
 
 * Simulation only: no public chest DTS dataset with CT ground truth exists. Monochromatic beam, no scatter.
+* Acquisition: 15 views instead of the 60-74 of clinical units (same angular range as the GE VolumeRAD,
+  equal total dose); the narrow 30 deg sweep is the conservative end (Shimadzu: up to 40 deg = less depth
+  smear). Step 13 quantifies both for the physics-only methods; the diffusion prior is trained and
+  tested on the 15-view, 30 deg geometry only.
 * Virtual growth is isotropic scaling; real nodules grow irregularly.
 * LIDC "ground truth" is itself variable between radiologists (we report reader CV).
 * The candidate detector is training-free and modest (on the first real LIDC patients it mostly found

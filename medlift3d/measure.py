@@ -219,3 +219,55 @@ def gaussian_mass_mg(gf, region: np.ndarray, vg: VolumeGeometry, mu_water: float
         return 0.0
     integ = gf.integrals().detach().cpu().numpy()
     return float(integ[inside].sum() / mu_water)
+
+
+def fwhm_1d(profile: np.ndarray, peak: int, spacing_mm: float) -> float:
+    """Full width at half maximum (mm) of the peak at index ``peak`` of a background-subtracted
+    profile (linear interpolation at the half-maximum crossings); NaN if the peak is not
+    positive or the profile never drops to half on one side."""
+    p = np.asarray(profile, dtype=float)
+    h = 0.5 * p[peak]
+    if not (h > 0):
+        return float("nan")
+
+    def crossing(step: int) -> float:
+        i = peak
+        while 0 <= i + step < len(p):
+            if p[i + step] < h:
+                return i + step * (p[i] - h) / (p[i] - p[i + step])
+            i += step
+        return float("nan")
+
+    return float((crossing(+1) - crossing(-1)) * spacing_mm)
+
+
+def depth_smear_metrics(vol_hu: np.ndarray, vg: VolumeGeometry, seed_xyz, baseline_hu: float,
+                        search_mm: float = 12.0, clutter_mm: Tuple[float, float] = (12.0, 25.0)) -> Dict:
+    """How well a reconstruction shows the nodule at ``seed_xyz``, without any segmentation.
+
+    contrast_hu  peak (HU above the lung baseline) of the depth profile through the seed
+                 (3 x 3 voxels in-plane), searched within +-``search_mm`` in depth
+    clutter_hu   robust std (1.4826 x MAD) of the anatomy around it: in-plane distance
+                 ``clutter_mm`` from the seed, within +-20 mm of the peak depth
+    depth_fwhm_mm / inplane_fwhm_mm   widths of the peak along y (depth) and x;
+                 their ratio is the depth smear (about 1 for a sphere in CT)
+    """
+    nz, ny, nx = vol_hu.shape
+    ix, iy, iz = np.round(vg.world_to_index(np.asarray(seed_xyz, float))).astype(int)
+    ix, iy, iz = int(np.clip(ix, 1, nx - 2)), int(np.clip(iy, 0, ny - 1)), int(np.clip(iz, 1, nz - 2))
+    sx, sy, sz = vg.spacing
+    prof_y = vol_hu[iz - 1:iz + 2, :, ix - 1:ix + 2].mean(axis=(0, 2)) - baseline_hu
+    w = int(round(search_mm / sy))
+    lo, hi = max(0, iy - w), min(ny, iy + w + 1)
+    py = lo + int(np.argmax(prof_y[lo:hi]))
+    prof_x = vol_hu[iz - 1:iz + 2, py, :].mean(axis=0) - baseline_hu
+    xs, ys, zs = vg.axes()
+    Z, Y, X = np.meshgrid(zs - zs[iz], ys - ys[py], xs - xs[ix], indexing="ij")
+    r = np.sqrt(X ** 2 + Z ** 2)
+    shell = (r >= clutter_mm[0]) & (r <= clutter_mm[1]) & (np.abs(Y) <= 20.0)
+    vals = vol_hu[shell]
+    clutter = float(1.4826 * np.median(np.abs(vals - np.median(vals)))) if vals.size else float("nan")
+    contrast = float(prof_y[py])
+    return {"contrast_hu": contrast, "clutter_hu": clutter,
+            "cnr": contrast / clutter if clutter > 0 else float("nan"),
+            "depth_fwhm_mm": fwhm_1d(prof_y, py, sy), "inplane_fwhm_mm": fwhm_1d(prof_x, ix, sx)}
