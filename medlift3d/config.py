@@ -77,8 +77,9 @@ DEFAULTS: Dict[str, Any] = {
         "max_extent_mm": [25.0, 50.0, 25.0],    # segmentation confined to this ellipsoid (x, y, z radii)
         "search_radius_mm": [6.0, 12.0, 6.0],   # peak search ellipsoid (x, y=depth, z)
         "open_radius_vox": 1,
-        "mass_dilate_mm": [2.0, 6.0, 2.0],  # (x, y, z) minimum dilation of the mask for mass
-        "mass_depth_factor": 1.5,           # depth dilation >= 1.5 x in-plane diameter (DTS smear)
+        "mass_dilate_mm": [2.0, 6.0, 2.0],  # (x, y, z) minimum dilation of a reconstruction's mask for mass
+        "mass_depth_factor": 0.5,           # depth dilation >= 0.5 x the mask's own depth extent (DTS smear)
+        "gt_mass_dilate_mm": [1.0, 1.0, 1.0],  # ground truth: radiologist mask + partial-volume rim only
     },
     "diffusion": {
         "base_ch": 32,

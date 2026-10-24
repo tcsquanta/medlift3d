@@ -67,8 +67,12 @@ Any of these can come out false. The report must state whichever results we actu
    Gaussians (initialised from the sample, refined against the measured projections with the rest of the
    prism fixed). Gaussians give **closed-form mass** (a (2 pi)^1.5 s1 s2 s3 per Gaussian) and a continuous
    field that can be evaluated on a fine grid for resolution-free volume.
-7. **Measurement:** seeded half-maximum segmentation (confined to a plausible nodule extent),
-   volume, excess mass over local lung (depth window scales with nodule size), 2D diameter baseline.
+7. **Measurement:** seeded half-maximum segmentation (confined to a plausible nodule extent; leaks
+   into the chest wall are detached or reported as not measurable), volume, excess mass over local lung,
+   2D diameter baseline. Ground-truth mass = inside the radiologists' consensus mask + 1 mm rim
+   (mass / volume 0.7-0.85 mg/mm^3 on real LIDC nodules). A reconstruction's mass window extends in
+   depth by half the segmentation's own depth extent, so it covers the DTS smear without summing the
+   neighbouring vessels / chest wall of a sharp reconstruction.
 8. **Uncertainty:** ensemble spread -> split-conformal intervals calibrated on held-out patients
    (asymmetric, log scale). These give a finite-sample coverage guarantee, unlike raw ensemble variance.
 9. **Growth:** virtual follow-up scans (nodule grown by a known factor in the CT, projections updated

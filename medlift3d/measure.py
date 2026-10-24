@@ -3,12 +3,15 @@
 Definitions (applied identically to CT ground truth and every reconstruction)
 -----------------------------------------------------------------------------
 * volume  V = (#voxels in nodule mask) x voxel volume                [mm^3]
-* mass    M = sum over (mask dilated by ``mass_dilate_mm``; the depth
-              dilation grows with nodule size, ``mass_depth_factor``) of
-              (HU - HU_lung) / 1000 x voxel volume                   [mg]
+* mass    M = sum over a region R of (HU - HU_lung) / 1000 x voxel volume   [mg]
   i.e. the *excess* water-equivalent mass of the nodule over local lung
-  (1 mg/mm^3 water density). Integrating over a dilated region makes M
-  insensitive to blur / partial volume / depth smear -- that is the point.
+  (1 mg/mm^3 water density).
+  - ground truth (CT + radiologist mask): R = mask + ``gt_mass_dilate_mm``
+    (1 mm partial-volume rim) -- the nodule itself, nothing around it;
+  - reconstructions: R = segmentation dilated by ``mass_dilate_mm``, in depth
+    by at least ``mass_depth_factor`` x the segmentation's own depth extent,
+    so a smeared (DTS) reconstruction gets a long depth window and a sharp one
+    a short window (which does not sum the neighbouring vessels / chest wall).
 * d2D     longest in-plane (coronal, x-z) diameter of the mask through its
           peak slice, the measurement a radiologist makes on DTS slices;
           V2D = pi/6 * d^3 (sphere assumption).
@@ -115,14 +118,15 @@ def volume_mm3(mask: np.ndarray, vg: VolumeGeometry) -> float:
 
 def mass_region(mask: np.ndarray, vg: VolumeGeometry, dilate: Sequence[float] = (2.0, 6.0, 2.0),
                 depth_factor: float = 0.0) -> np.ndarray:
-    """Mask dilated by (x, y, z) mm; the depth (y) dilation grows with nodule size:
-    max(dilate_y, depth_factor * in-plane long diameter) -- DTS smears ~ size / tan(15 deg)."""
+    """Mask dilated by (x, y, z) mm; the depth (y) dilation is at least ``depth_factor`` x the
+    mask's own depth extent: long for a depth-smeared reconstruction, short for a sharp one."""
     if not mask.any():
         return mask.copy()
     dil = list(dilate)
     if depth_factor > 0:
-        d_long, _ = coronal_diameters(mask, vg)
-        dil[1] = max(dil[1], depth_factor * d_long)
+        ys = np.nonzero(mask.any(axis=(0, 2)))[0]
+        depth_mm = (ys.max() - ys.min() + 1) * vg.spacing[1]
+        dil[1] = max(dil[1], depth_factor * depth_mm)
     return dilate_mm(mask, vg, dil)
 
 
@@ -191,15 +195,15 @@ def measure_reconstruction(vol_hu: np.ndarray, vg: VolumeGeometry, seed_xyz, bas
 
 def measure_ground_truth(vol_hu: np.ndarray, vg: VolumeGeometry, mask: np.ndarray, mcfg: dict,
                          baseline_hu: Optional[float] = None) -> Dict:
-    """Ground-truth measurements from CT + radiologist mask (same definitions)."""
+    """Ground-truth measurements from CT + radiologist mask: volume of the mask, mass of the
+    nodule itself (mask + ``gt_mass_dilate_mm`` partial-volume rim, no depth window)."""
     if baseline_hu is None:
         shell = dilate_mm(mask, vg, (15.0, 15.0, 15.0)) & ~dilate_mm(mask, vg, (5.0, 5.0, 5.0))
         sel = shell & (vol_hu > -1000) & (vol_hu < -500)
         baseline_hu = float(np.median(vol_hu[sel])) if sel.sum() > 30 else -850.0
     d_long, d_short = coronal_diameters(mask, vg)
     return {"volume_mm3": volume_mm3(mask, vg),
-            "mass_mg": excess_mass_mg(vol_hu, vg, mask, baseline_hu, mcfg["mass_dilate_mm"],
-                                      float(mcfg.get("mass_depth_factor", 0.0))),
+            "mass_mg": excess_mass_mg(vol_hu, vg, mask, baseline_hu, mcfg.get("gt_mass_dilate_mm", (1.0, 1.0, 1.0)), 0.0),
             "d2d_long_mm": d_long, "d2d_short_mm": d_short,
             "eq_diameter_mm": equivalent_diameter(volume_mm3(mask, vg)),
             "baseline_hu": float(baseline_hu),
