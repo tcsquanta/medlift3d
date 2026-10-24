@@ -139,7 +139,7 @@ def save_curve(path: str, ys: Dict[str, Sequence[float]], title: str, xlabel: st
 
 
 def save_roi_panel(path: str, vols: Dict[str, np.ndarray], vg: VolumeGeometry, xyz, masks: Optional[Dict] = None,
-                   std: Optional[Dict[str, np.ndarray]] = None, title: str = "") -> str:
+                   std: Optional[Dict[str, np.ndarray]] = None, title: str = "", window=HU_WIN) -> str:
     """One row per method: coronal (what DTS shows) and sagittal (depth) slices."""
     names = list(vols.keys())
     ncol = 4 if std else 2
@@ -152,7 +152,7 @@ def save_roi_panel(path: str, vols: Dict[str, np.ndarray], vg: VolumeGeometry, x
         for c, (img, mm, asp, lab) in enumerate([(v[:, iy, :][::-1], None if m is None else m[:, iy, :][::-1], sz / sx, "coronal"),
                                                  (v[:, :, ix][::-1], None if m is None else m[:, :, ix][::-1], sz / sy, "sagittal (depth ->)")]):
             a = axs[r, c]
-            a.imshow(img, cmap="gray", vmin=HU_WIN[0], vmax=HU_WIN[1], aspect=asp)
+            a.imshow(img, cmap="gray", vmin=window[0], vmax=window[1], aspect=asp)
             if mm is not None and mm.any():
                 a.contour(mm.astype(float), levels=[0.5], colors="r", linewidths=0.8)
             a.set_title(f"{n}: {lab}", fontsize=7)

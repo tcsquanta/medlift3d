@@ -22,7 +22,7 @@ import torch
 from .data.cases import Case
 from .geometry import DTSGeometry, VolumeGeometry, bin_projections, depth_support
 from .growth import MIN_MEASURABLE
-from .measure import (mass_region, measure_ground_truth, measure_reconstruction, segment_nodule,
+from .measure import (dilate_mm, mass_region, measure_ground_truth, measure_reconstruction, segment_nodule,
                       volume_mm3, gaussian_mass_mg)
 from .metrics import dice, hd95, psnr, ssim3d
 from .physics import hu_to_mu, mu_to_hu
@@ -215,6 +215,38 @@ def ground_truth_for_roi(case: Case, nodule_index: int, roi: ROI, mcfg: dict) ->
         out["meas"]["reader_volume_cv"] = float(np.std(vols) / max(np.mean(vols), 1e-9))
         out["meas"]["reader_volumes"] = vols
     return out
+
+
+def nodule_spread(case: Case, nodule_index: int, prob: ROIProblem, mcfg: dict, n_iter: int = 40,
+                  step_mm: float = 0.5):
+    """Artifact spread function of one nodule: how the prism reconstruction spreads it in depth.
+
+    Only the nodule's excess attenuation over local lung (consensus mask + ``gt_mass_dilate_mm``
+    rim) is projected along the prism's rays (projections are linear, no noise, no anatomy) and
+    reconstructed with the same SIRT. Returns (reconstructed excess HU, true excess HU), both on
+    the prism grid -- free of the overlapping anatomy that hides a nodule's depth profile in the
+    full reconstruction.
+    """
+    nod = case.nodules[nodule_index]
+    sp = np.asarray(case.vgeom.spacing)[::-1]                                     # z, y, x
+    pad = np.ceil(4.0 / sp).astype(int)
+    z0, z1, y0, y1, x0, x1 = nod.bbox_zyx
+    lo = np.maximum(np.array([z0, y0, x0]) - pad, 0)
+    hi = np.minimum(np.array([z1, y1, x1]) + pad, case.hu.shape)
+    sl = tuple(slice(a, b) for a, b in zip(lo, hi))
+    crop = case.hu[sl].astype(np.float32)
+    mask = nod.full_mask(case.hu.shape)[sl]
+    cvg = VolumeGeometry(crop.shape, case.vgeom.spacing, tuple(case.vgeom.index_to_world(lo[::-1].astype(float))))
+    base = measure_ground_truth(crop, cvg, mask, mcfg)["baseline_hu"]
+    region = dilate_mm(mask, cvg, mcfg.get("gt_mass_dilate_mm", (1.0, 1.0, 1.0)))
+    excess_hu = np.where(region, np.clip(crop - base, 0.0, None), 0.0).astype(np.float32)
+    dev = prob.device
+    dmu = torch.as_tensor(excess_hu * prob.mu_water / 1000.0, device=dev)
+    with torch.no_grad():
+        b = Projector(cvg, step_mm=step_mm, use_checkpoint=False)(dmu, prob.o, prob.d)
+    x, _ = prob.sirt_solver().run(b, n_iter=n_iter, x0=torch.zeros(prob.vg.shape, device=dev))
+    rec = x.cpu().numpy() * 1000.0 / prob.mu_water
+    return rec, resample_to_grid(excess_hu, cvg, prob.vg, order=1, cval=0.0)
 
 
 # ---------------------------------------------------------------------------

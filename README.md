@@ -27,7 +27,7 @@ nodule box --> mass (closed form) / volume (continuous field) --> conformal inte
 
 ```bash
 pip install -r requirements.txt          # on Kaggle / Vast.ai keep the preinstalled torch
-python -m pytest -q                      # 51 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
+python -m pytest -q                      # 52 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
 python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic phantoms (CPU, ~45 min on 4 cores)
 ```
 

@@ -51,7 +51,9 @@ Any of these can come out false. The report must state whichever results we actu
    (+-15 deg, as in published VolumeRAD simulation models; Shimadzu allows up to 40 deg). Real units take
    60-74 views; we take 15 to save compute (every simulation / reconstruction step scales with the views).
    Step 13 re-runs the physics-only methods with 60/74 views and a 40 deg sweep at equal total dose to
-   measure how much this choice matters. (Breast tomosynthesis uses 15-50 deg and arcs; not our setting.)
+   measure how much this choice matters (depth smear from the nodule's artifact spread function; on a
+   16 mm phantom nodule: 3.85 at 15 views / 30 deg, 3.99 at 60 views, 2.98 at 40 deg -- the sweep angle
+   matters, the number of views does not). (Breast tomosynthesis uses 15-50 deg and arcs; not our setting.)
    Simulated at CT resolution with fine ray sampling; reconstructed on different grids (no inverse crime).
 3. **Standard DTS reconstruction:** coarse whole-chest SIRT (2.5 mm), confined in depth to the patient
    (between the detector and the back, from the patient thickness that a DTS unit measures at acquisition;

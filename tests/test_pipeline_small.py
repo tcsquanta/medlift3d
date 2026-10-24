@@ -78,3 +78,29 @@ def test_roi_data_match_true_column_with_air_margins():
     with torch.no_grad():
         ratio = float(prob.residual.mean() / prob.forward(x_true).mean())
     assert 0.9 < ratio < 1.1, ratio
+
+
+def test_nodule_spread_depth_smear_shrinks_with_sweep(small_case):
+    """Artifact spread function (step 13): the nodule alone, reconstructed with the prism SIRT, is
+    smeared in depth, less so with a wider sweep, and keeps its mass (measured by every view)."""
+    from medlift3d.measure import depth_smear_metrics
+    from medlift3d.physics import hu_to_mu
+    from medlift3d.pipeline import CaseContext, build_problem, coarse_grid, nodule_spread
+    from medlift3d.roi import resample_to_grid
+    from medlift3d.simulate import geometry_for_volume
+
+    cfg = small_cfg()
+    nod = small_case.nodules[0]
+    smear = {}
+    for sweep in (30.0, 60.0):
+        geom = geometry_for_volume(small_case.hu, small_case.vgeom, dict(cfg["geometry"], sweep_deg=sweep))
+        cvg = coarse_grid(small_case.vgeom, cfg["sirt"]["voxel_mm"], geom.depth_range())
+        cmu = torch.as_tensor(hu_to_mu(resample_to_grid(small_case.hu, small_case.vgeom, cvg), 0.02))
+        ctx = CaseContext("ph", geom, torch.zeros((geom.n_views, *geom.det_shape)), cmu, cvg)  # rays only
+        prob = build_problem(ctx, nod.center_xyz, cfg)
+        rec, truth = nodule_spread(small_case, 0, prob, cfg["measure"], n_iter=30)
+        assert abs(rec.sum() / truth.sum() - 1) < 0.2, (rec.sum(), truth.sum())
+        m, t = (depth_smear_metrics(v, prob.vg, nod.center_xyz, 0.0) for v in (rec, truth))
+        assert t["depth_fwhm_mm"] / t["inplane_fwhm_mm"] < 1.5                 # the sphere itself
+        smear[sweep] = m["depth_fwhm_mm"] / m["inplane_fwhm_mm"]
+    assert smear[30.0] > 1.5 and smear[60.0] < smear[30.0], smear

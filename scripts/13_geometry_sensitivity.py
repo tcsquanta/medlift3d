@@ -13,9 +13,10 @@ Total dose is kept equal (photons per view = i0 x reference views / views; use -
 to keep i0 per view instead). Only physics methods: the diffusion model was trained on the
 reference geometry, so other geometries would be out of distribution for it.
 
-Per nodule and geometry: nodule contrast and clutter in the prism ROI-SIRT, depth smear
-(depth FWHM / in-plane FWHM of the nodule peak; no segmentation involved), and every method's
-volume / mass error. Results: work/results/geometry.jsonl (resumable),
+Per nodule and geometry: nodule contrast and clutter in the prism ROI-SIRT; the depth smear from
+the nodule's artifact spread function (the nodule alone projected along the prism's rays and
+reconstructed with the same SIRT: depth FWHM / in-plane FWHM and peak recovery, free of the
+overlapping anatomy); and every method's volume / mass error. Results: work/results/geometry.jsonl (resumable),
 outputs/13_geometry/table_geometry.md and figures.
 
     python scripts/13_geometry_sensitivity.py --limit 12                       # ~1 h on one T4
@@ -34,7 +35,8 @@ from medlift3d.data.cases import load_case
 from medlift3d.growth import MIN_MEASURABLE
 from medlift3d.io import Paths, append_jsonl, load_dts, load_json, read_jsonl, stable_seed
 from medlift3d.measure import depth_smear_metrics
-from medlift3d.pipeline import CaseContext, coarse_sirt, ground_truth_for_roi, process_nodule
+from medlift3d.pipeline import (CaseContext, build_problem, coarse_sirt, ground_truth_for_roi, nodule_spread,
+                                process_nodule)
 from medlift3d.roi import ROI
 from medlift3d.simulate import add_noise, geometry_for_volume, simulate_clean
 from medlift3d.utils import Checker
@@ -137,34 +139,42 @@ def main():
                 roi = ROI.from_config(nod.center_xyz, cfg["roi"], geom)
                 try:
                     if j not in gt_cache:
-                        gt = ground_truth_for_roi(case, j, roi, cfg["measure"])
-                        gt_cache[j] = (gt, depth_smear_metrics(gt["roi_hu"], gt["roi_vg"], nod.center_xyz,
-                                                               gt["meas"]["baseline_hu"]))
-                    gt, gt_smear = gt_cache[j]
+                        gt_cache[j] = ground_truth_for_roi(case, j, roi, cfg["measure"])
+                    gt = gt_cache[j]
                     res = process_nodule(ctx, nod.center_xyz, cfg, None, None, args.methods, None, seed=stable_seed(cid, j),
                                          gt=gt, keep_volumes=True, n_members_physics=args.members)
+                    prob = build_problem(ctx, nod.center_xyz, cfg)
+                    spread, truth = nodule_spread(case, j, prob, cfg["measure"], n_iter=int(cfg["roi"]["sirt_iter"]))
+                    del prob
                 except Exception as e:
                     n_fail += 1
                     print(f"{cid} n{j} {v}: FAILED {e}")
                     continue
-                smear = depth_smear_metrics(res["roi_sirt_hu"], res["roi_vg"], nod.center_xyz, res["baseline_hu"])
+                vg = res["roi_vg"]
+                sirt_m = depth_smear_metrics(res["roi_sirt_hu"], vg, nod.center_xyz, res["baseline_hu"])
+                asf = depth_smear_metrics(spread, vg, nod.center_xyz, 0.0)
+                asf_gt = depth_smear_metrics(truth, vg, nod.center_xyz, 0.0)
+                asf["peak_recovery"] = asf["contrast_hu"] / max(asf_gt["contrast_hu"], 1e-6)
                 if j in fig_vols:
-                    fig_vols[j][label(v)] = res["roi_sirt_hu"]
+                    fig_vols[j][label(v)] = (res["roi_sirt_hu"], spread, truth)
                 if (cid, j, v) in done:
                     continue
                 row = {"case_id": cid, "nodule_index": j, "diameter_mm": nod.diameter_mm, "variant": v,
                        "n_views": n, "sweep_deg": deg, "i0_per_view": i0_v, "reference": v == ref,
-                       "sim_s": t_sim, "coarse_sirt_s": t_sirt, "gt": gt["meas"], "gt_smear": gt_smear,
-                       "roi_sirt_smear": smear, "methods": {}}
+                       "sim_s": t_sim, "coarse_sirt_s": t_sirt, "gt": gt["meas"],
+                       "roi_sirt": {k: sirt_m[k] for k in ("contrast_hu", "clutter_hu", "cnr")},
+                       "spread": {k: asf[k] for k in ("depth_fwhm_mm", "inplane_fwhm_mm", "peak_recovery")},
+                       "spread_truth": {k: asf_gt[k] for k in ("depth_fwhm_mm", "inplane_fwhm_mm")}, "methods": {}}
                 for m, e in res["methods"].items():
                     row["methods"][m] = {k: e[k] for k in ("volume_mm3", "mass_mg", "n_found", "n_members", "dice")}
                 append_jsonl(row, res_path)
                 done.add((cid, j, v))
                 g = gt["meas"]
                 line = "  ".join(f"{m}: V{e['volume_mm3']:.0f}/M{e['mass_mg']:.0f}" for m, e in row["methods"].items())
-                print(f"{cid} n{j} d={nod.diameter_mm:.1f}mm {v}: contrast {smear['contrast_hu']:.0f} HU, "
-                      f"clutter {smear['clutter_hu']:.0f} HU, depth/in-plane FWHM "
-                      f"{smear['depth_fwhm_mm']:.1f}/{smear['inplane_fwhm_mm']:.1f} mm | GT V{g['volume_mm3']:.0f}/"
+                print(f"{cid} n{j} d={nod.diameter_mm:.1f}mm {v}: contrast {sirt_m['contrast_hu']:.0f} HU, "
+                      f"clutter {sirt_m['clutter_hu']:.0f} HU | nodule spread: depth/in-plane FWHM "
+                      f"{asf['depth_fwhm_mm']:.1f}/{asf['inplane_fwhm_mm']:.1f} mm (CT {asf_gt['depth_fwhm_mm']:.1f}/"
+                      f"{asf_gt['inplane_fwhm_mm']:.1f}), peak {100 * asf['peak_recovery']:.0f}% | GT V{g['volume_mm3']:.0f}/"
                       f"M{g['mass_mg']:.0f} | {line}", flush=True)
             del ctx, noisy, cmu
             if torch.cuda.is_available():
@@ -172,12 +182,16 @@ def main():
         for j, vols in fig_vols.items():
             if len(vols) < 2 or j not in gt_cache:
                 continue
-            gt = gt_cache[j][0]
-            panel = {"CT (truth)": gt["roi_hu"], **vols}
-            viz.save_roi_panel(os.path.join(out, f"{cid}_n{j}_roi_sirt.png"), panel, gt["roi_vg"],
-                               case.nodules[j].center_xyz, {"CT (truth)": gt["roi_mask"]}, None,
-                               f"{cid} nodule {j} (d={case.nodules[j].diameter_mm:.1f} mm): physics-only ROI-SIRT "
-                               "per DTS geometry")
+            gt, d = gt_cache[j], case.nodules[j].diameter_mm
+            xyz, truth = case.nodules[j].center_xyz, next(iter(vols.values()))[2]
+            viz.save_roi_panel(os.path.join(out, f"{cid}_n{j}_roi_sirt.png"),
+                               {"CT (truth)": gt["roi_hu"], **{k: t[0] for k, t in vols.items()}}, gt["roi_vg"], xyz,
+                               {"CT (truth)": gt["roi_mask"]}, None,
+                               f"{cid} nodule {j} (d={d:.1f} mm): physics-only ROI-SIRT per DTS geometry")
+            viz.save_roi_panel(os.path.join(out, f"{cid}_n{j}_spread.png"),
+                               {"nodule alone (CT)": truth, **{k: t[1] for k, t in vols.items()}}, gt["roi_vg"], xyz,
+                               None, None, f"{cid} nodule {j} (d={d:.1f} mm): the nodule alone, reconstructed "
+                               "(artifact spread function; excess HU)", window=(0.0, float(truth.max()) or 1.0))
             figs += 1
 
     rows = read_jsonl(res_path)
@@ -202,23 +216,23 @@ def main():
     ck.info("nodules with results for every geometry (the tables use only these)", len(common))
     cs = set(common)
     sel = {v: [r for r in have[v] if (r["case_id"], r["nodule_index"]) in cs] for v in variants}
-    t1 = ["| geometry | nodules | contrast (HU above lung) | clutter (HU) | contrast / clutter "
-          "| depth smear (depth FWHM / in-plane FWHM) | simulation + coarse SIRT per case |",
-          "|---|---|---|---|---|---|---|"]
-    ct = [r["gt_smear"] for r in sel[ref]]
-    t1.append(f"| CT (truth) | {len(ct)} | {median([s['contrast_hu'] for s in ct]):.0f} | "
-              f"{median([s['clutter_hu'] for s in ct]):.0f} | {median([s['cnr'] for s in ct]):.1f} | "
-              f"{median([s['depth_fwhm_mm'] / s['inplane_fwhm_mm'] for s in ct]):.2f} | - |")
+    t1 = ["| geometry | nodules | depth smear (depth FWHM / in-plane FWHM) | nodule peak kept | contrast (HU above lung) "
+          "| clutter (HU) | contrast / clutter | simulation + coarse SIRT per case |",
+          "|---|---|---|---|---|---|---|---|"]
+    ct = [r["spread_truth"] for r in sel[ref]]
+    t1.append(f"| CT (truth) | {len(ct)} | {median([s['depth_fwhm_mm'] / s['inplane_fwhm_mm'] for s in ct]):.2f} "
+              f"| 100% | - | - | - | - |")
     summary = {}
     for v in variants:
-        S = [r["roi_sirt_smear"] for r in sel[v]]
-        ratio = [s["depth_fwhm_mm"] / s["inplane_fwhm_mm"] for s in S]
+        S, A = [r["roi_sirt"] for r in sel[v]], [r["spread"] for r in sel[v]]
+        ratio = [a["depth_fwhm_mm"] / a["inplane_fwhm_mm"] for a in A]
         per_case = {r["case_id"]: r["sim_s"] + r["coarse_sirt_s"] for r in sel[v]}
         summary[v] = {"contrast": median([s["contrast_hu"] for s in S]), "cnr": median([s["cnr"] for s in S]),
-                      "smear": median(ratio)}
-        t1.append(f"| {label(v)}{' (ours)' if v == ref else ''} | {len(S)} | {summary[v]['contrast']:.0f} | "
-                  f"{median([s['clutter_hu'] for s in S]):.0f} | {summary[v]['cnr']:.1f} | {summary[v]['smear']:.2f} "
-                  f"(n={int(np.isfinite(ratio).sum())}) | {median(list(per_case.values())):.0f} s |")
+                      "smear": median(ratio), "peak": median([a["peak_recovery"] for a in A])}
+        t1.append(f"| {label(v)}{' (ours)' if v == ref else ''} | {len(S)} | {summary[v]['smear']:.2f} "
+                  f"(n={int(np.isfinite(ratio).sum())}) | {100 * summary[v]['peak']:.0f}% | {summary[v]['contrast']:.0f} | "
+                  f"{median([s['clutter_hu'] for s in S]):.0f} | {summary[v]['cnr']:.1f} | "
+                  f"{median(list(per_case.values())):.0f} s |")
     t2 = ["| geometry | method | volume MdAPE | mass MdAPE | nodule found |", "|---|---|---|---|---|"]
     for v in variants:
         for m in args.methods:
@@ -230,8 +244,9 @@ def main():
             summary[v][m] = (ev, em)
             t2.append(f"| {label(v)} | {m} | {100 * ev:.0f}% | {100 * em:.0f}% | {100 * found:.0f}% |")
     note = ("Physics-only methods, same nodules in every row. MdAPE = median |estimate / truth - 1| "
-            "(a nodule not found counts as 100%). Depth smear has no segmentation: widths of the nodule's "
-            "peak in the ROI-SIRT. Dose: " + ("equal total dose per scan." if args.dose == "matched"
+            "(a nodule not found counts as 100%). Depth smear and peak kept: the nodule alone projected and "
+            "reconstructed with the prism SIRT (artifact spread function; no anatomy, no noise, no segmentation). "
+            "Contrast / clutter: the nodule's peak and the surrounding anatomy's spread in the full ROI-SIRT. Dose: " + ("equal total dose per scan." if args.dose == "matched"
                                                else "equal dose per view."))
     text = "\n".join(t1) + "\n\n" + "\n".join(t2) + "\n\n" + note + "\n"
     print("\n" + text)
@@ -241,7 +256,9 @@ def main():
         if v == ref:
             continue
         a, b = summary[ref], summary[v]
-        parts = [f"depth smear {a['smear']:.2f} -> {b['smear']:.2f}", f"contrast {a['contrast']:.0f} -> {b['contrast']:.0f} HU",
+        parts = [f"depth smear {a['smear']:.2f} -> {b['smear']:.2f}",
+                 f"nodule peak kept {100 * a['peak']:.0f}% -> {100 * b['peak']:.0f}%",
+                 f"contrast {a['contrast']:.0f} -> {b['contrast']:.0f} HU",
                  f"contrast/clutter {a['cnr']:.1f} -> {b['cnr']:.1f}"]
         parts += [f"{m} volume/mass MdAPE {100 * a[m][0]:.0f}/{100 * a[m][1]:.0f}% -> {100 * b[m][0]:.0f}/{100 * b[m][1]:.0f}%"
                   for m in args.methods if m in a and m in b]

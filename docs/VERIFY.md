@@ -12,7 +12,7 @@ and writes `outputs/<step>/verification.md` + `verification.json` and figures. A
 code check means something is wrong: stop and look before continuing. Lines starting with
 **H1-H4** are *scientific results*, not code checks; they may honestly come out either way.
 
-Run the unit tests any time: `python -m pytest -q` (51 tests, about 5-10 min on CPU).
+Run the unit tests any time: `python -m pytest -q` (52 tests, about 5-10 min on CPU).
 
 ## Step 0 - environment (`00_check_env.py`)
 * PASS: torch, numpy, scipy, scikit-image, matplotlib, yaml, pydicom import; pylidc database has 1018 scans.
@@ -108,13 +108,19 @@ re-simulates the same patients with other geometries (default 15x30, 60x30, 15x4
 dose) and runs the physics-only methods on the same nodules.
 * PASS: no errors, every geometry has results, the nodule is on the detector in every view.
 * `table_geometry.md` (scientific, report it as it comes out):
+  - *depth smear* and *nodule peak kept* come from the nodule's **artifact spread function**: the
+    nodule alone (CT excess over lung) projected along the prism's rays and reconstructed with the
+    same SIRT, so overlapping anatomy cannot hide its depth profile (the standard DTS depth-resolution
+    measure). CT truth ~1 (a round nodule).
   - *views* (15x30 vs 60x30): the depth smear should barely change (it is set by the sweep angle);
     contrast / clutter may change a little (fewer streaks).
-  - *angle* (15x30 vs 15x40): the depth smear should shrink, roughly with 1/sin(half sweep), i.e.
-    ~1.3x less at +-20 deg than at +-15 deg (much less in practice: the iterative reconstruction
-    and the prism support also limit the depth extent).
+  - *angle* (15x30 vs 15x40): the depth smear should shrink, roughly with tan(half sweep), i.e.
+    ~1.3x less at +-20 deg than at +-15 deg.
+    Measured on a 16 mm phantom nodule (unit test setting): depth smear 3.85 (15x30), 3.99 (60x30),
+    2.98 (15x40), 2.79 (15x60); nodule peak kept 27%, 26%, 34%, 36%.
   - mass error should depend much less on the geometry than volume error (H1 again).
-* Figures `<case>_n<j>_roi_sirt.png`: the same nodule's ROI-SIRT per geometry next to the CT.
+* Figures `<case>_n<j>_roi_sirt.png` (the same nodule's ROI-SIRT per geometry next to the CT) and
+  `<case>_n<j>_spread.png` (the nodule alone, reconstructed per geometry).
 * Diffusion is not run here (trained on the 15x30 geometry only).
 
 ## Smoke test (`smoke_test.py`)

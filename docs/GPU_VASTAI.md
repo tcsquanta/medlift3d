@@ -40,7 +40,7 @@ Ten patients (~1.1 GB of DICOM) fit easily in `/kaggle/working`. Paste into cell
 %cd medlift3d
 !pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
 !python scripts/00_check_env.py                       # GPU listed? projector speed?
-!python -m pytest -q                                  # 51 tests, all must pass
+!python -m pytest -q                                  # 52 tests, all must pass
 !python scripts/02_select_lidc.py --n-patients 10
 !python scripts/03_download_lidc.py --workers 4
 !python scripts/04_prepare_cases.py --source lidc
