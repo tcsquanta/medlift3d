@@ -249,3 +249,23 @@ class DemoSession:
             col = np.zeros(len(verts))
         xyz = verts[:, ::-1] + vg.origin_arr                          # world (x, y, z)
         return xyz, faces, col
+
+    def truth_mesh(self, max_mm: float = 20.0):
+        """Vertices (world x, y, z) and faces of the radiologists' consensus nodule nearest the
+        last click (LIDC ground truth, for comparison in the demo); None if there is none."""
+        from skimage.measure import marching_cubes
+
+        if self.last is None or self.case is None:
+            return None
+        j = self.nearest_nodule(self.last["click"], max_mm=max_mm)
+        if j is None:
+            return None
+        n = self.case.nodules[j]
+        if n.mask.sum() < 4:
+            return None
+        sp = np.asarray(self.case.vgeom.spacing, float)[::-1]          # (z, y, x) mm
+        verts, faces, _, _ = marching_cubes(np.pad(n.mask, 1).astype(np.float32), 0.5, spacing=tuple(sp))
+        z0, _, y0, _, x0, _ = n.bbox_zyx
+        corner = self.case.vgeom.index_to_world(np.array([x0, y0, z0], float))   # world of crop voxel (0,0,0)
+        xyz = (verts - sp)[:, ::-1] + corner                          # undo padding, to world (x, y, z)
+        return xyz, faces

@@ -28,15 +28,27 @@ def build_ui(sess: DemoSession):
     state = {"iy": 0}
 
     def fig3d():
-        m = sess.mesh()
-        if m is None:
-            return go.Figure().update_layout(title="no nodule surface (nothing segmented at the click)")
-        xyz, faces, col = m
-        f = go.Figure(go.Mesh3d(x=xyz[:, 0], y=xyz[:, 1], z=xyz[:, 2], i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
-                                intensity=col, colorscale="RdYlGn_r", colorbar=dict(title="std (HU)"), opacity=1.0))
+        m, t = sess.mesh(), sess.truth_mesh()
+        f = go.Figure()
+        if m is not None:
+            xyz, faces, col = m
+            f.add_trace(go.Mesh3d(x=xyz[:, 0], y=xyz[:, 1], z=xyz[:, 2], i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                                  intensity=col, colorscale="RdYlGn_r", colorbar=dict(title="std (HU)"), opacity=1.0,
+                                  name="MedLift-3D reconstruction", showlegend=True))
+        if t is not None:                                   # radiologists' nodule (ground truth), see-through
+            txyz, tfaces = t
+            f.add_trace(go.Mesh3d(x=txyz[:, 0], y=txyz[:, 1], z=txyz[:, 2], i=tfaces[:, 0], j=tfaces[:, 1],
+                                  k=tfaces[:, 2], color="lightgrey", opacity=0.35, name="radiologists' nodule (truth)",
+                                  showlegend=True))
+        if m is None and t is None:
+            return f.update_layout(title="no nodule surface (nothing segmented at the click)")
+        title = ("green = hypotheses agree, red = uncertain (depth); grey = radiologists' nodule"
+                 if m is not None else "nothing segmented at the click; grey = radiologists' nodule")
         f.update_layout(scene=dict(xaxis_title="x (mm)", yaxis_title="depth y (mm)", zaxis_title="z (mm)",
-                                   aspectmode="data"), margin=dict(l=0, r=0, t=30, b=0),
-                        title="nodule surface: green = X-rays agree, red = uncertain (depth)")
+                                   aspectmode="data"), margin=dict(l=0, r=0, t=40, b=0), title=title,
+                        legend=dict(orientation="h", y=-0.02),
+                        annotations=[dict(text="drag to rotate, scroll to zoom", showarrow=False, x=0, y=1.0,
+                                          xref="paper", yref="paper", font=dict(size=11))])
         return f
 
     def on_case(name):
@@ -115,7 +127,7 @@ def build_ui(sess: DemoSession):
                                     label="radiologist-annotated nodules (green; LIDC ground truth, for the demo)")
             with gr.Column(scale=1):
                 report = gr.Markdown()
-                plot3d = gr.Plot(label="3D nodule (uncertainty colour)")
+                plot3d = gr.Plot(label="3D nodule: reconstruction (green-red) vs radiologists' nodule (grey)")
                 panel = gr.Image(label="reconstruction (coronal / sagittal)")
                 with gr.Row():
                     days = gr.Number(180, label="follow-up interval (days)")
@@ -156,6 +168,10 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
     ck.info("method used", rep["method"] + (f" ({rep['note']})" if rep["note"] else ""))
     m = sess.mesh()
     ck.check("3D surface mesh", m is not None and len(m[1]) > 0, f"{0 if m is None else len(m[1])} faces")
+    t = sess.truth_mesh()
+    if m is not None and t is not None:                  # truth surface must sit where the reconstruction is
+        gap = float(np.linalg.norm(m[0].mean(0) - t[0].mean(0)))
+        ck.check("3D truth surface overlaps the reconstruction (centre distance)", gap < 10.0, f"{gap:.1f} mm", "< 10 mm")
     try:
         g = sess.followup(180.0, 300.0)
         ck.check("virtual follow-up -> VDT/MDT", np.isfinite(g["mdt_days"]) or np.isinf(g["mdt_days"]),
