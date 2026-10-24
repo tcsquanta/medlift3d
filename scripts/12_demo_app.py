@@ -73,14 +73,16 @@ def build_ui(sess: DemoSession):
         masks = {f"{meth} (mean)": e["vote_mask"]}
         stds = {f"{meth} (mean)": e["std_volume"]} if e.get("std_volume") is not None else None
         import os
-        path = viz.save_roi_panel(os.path.join(sess.cfg["paths"]["outputs"], "12_demo", "last_roi.png"), vols, res["roi_vg"], xyz, masks, stds,
+        import time
+        # a new file per click: the browser may still be loading the previous one
+        path = viz.save_roi_panel(os.path.join(sess.cfg["paths"]["outputs"], "12_demo", f"roi_{time.time_ns()}.png"), vols, res["roi_vg"], xyz, masks, stds,
                                   "coronal = what DTS shows, sagittal = depth (where DTS is blind)")
         md = (f"### Nodule at ({xyz[0]:.0f}, {xyz[1]:.0f}, {xyz[2]:.0f}) mm\n"
               f"- **Mass:** {rep['mass_mg']:.0f} mg  [{rep['mass_interval'][0]:.0f} - {rep['mass_interval'][1]:.0f}]  ({rep['interval_type']})\n"
               f"- **Volume:** {rep['volume_mm3']:.0f} mm3  [{rep['volume_interval'][0]:.0f} - {rep['volume_interval'][1]:.0f}]\n"
               f"- 2D diameter on the DTS slice: {rep['d2d_long_mm']:.1f} mm\n"
               f"- EUPS volume category: {rep['eups_category']}\n"
-              f"- method: {rep['method']}, {rep['n_members']} hypotheses, {rep['seconds']:.1f} s\n"
+              f"- method: {rep['method']}, {rep['n_found']} of {rep['n_members']} hypotheses found a nodule, {rep['seconds']:.1f} s\n"
               + (f"- **note:** {rep['note']}\n" if rep["note"] else "") + "\n"
               "_Mass is measured directly by every X-ray view; volume needs the depth extent, which DTS cannot see -- "
               "hence its wider interval._")
@@ -145,7 +147,8 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
     ck.check("case loads, candidates computed", sess.ctx is not None, f"{cases[0]}: {len(sess.candidates)} candidates")
     img = sess.coronal_image(sess.n_depth // 2)
     ck.check("coronal slice image", img.ndim == 3 and img.shape[2] == 3, str(img.shape))
-    nod = sess.case.nodules[0]
+    nod = max(sess.case.nodules, key=lambda n: n.diameter_mm)          # the clearest nodule of the case
+    ck.info("test nodule", f"d = {nod.diameter_mm:.1f} mm at {[round(v) for v in nod.center_xyz]}")
     rep = sess.analyze(nod.center_xyz)
     ck.check("analysis report finite", np.isfinite(rep["volume_mm3"]) and np.isfinite(rep["mass_mg"]),
              f"V {rep['volume_mm3']:.0f} mm3 [{rep['volume_interval'][0]:.0f}-{rep['volume_interval'][1]:.0f}], "
@@ -176,7 +179,8 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
         vg = sess.ctx.coarse_vg
         ix, _, iz = np.round(vg.world_to_index(np.asarray(nod.center_xyz))).astype(int)
         row = (vg.shape[0] - 1) - iz
-        md, path, fig = h["on_click"](SimpleNamespace(index=[int(ix), int(row)]))
+        s = sess.display_scale                                             # click in the enlarged image
+        md, path, fig = h["on_click"](SimpleNamespace(index=[int(ix) * s + s // 2, int(row) * s + s // 2]))
         ck.check("UI: click on the nodule -> report + panel + 3D plot", "Mass" in md and os.path.exists(path), path)
         fu_md = h["on_followup"](180, 300)
         ck.check("UI: follow-up button", "doubling" in fu_md, fu_md.splitlines()[0][:120])
@@ -195,9 +199,11 @@ def main():
     ap.add_argument("--share", action="store_true")
     ap.add_argument("--port", type=int, default=7860)
     ap.add_argument("--selftest", action="store_true", help="test the backend headless and exit")
+    ap.add_argument("--members", type=int, default=4,
+                    help="diffusion hypotheses per click (4: ~2x faster than the evaluation's 8)")
     args = ap.parse_args()
     cfg, dev = setup(args)
-    sess = DemoSession(cfg, dev)
+    sess = DemoSession(cfg, dev, n_members=args.members)
     print(f"method: {sess.method} | calibration: {'yes' if sess.calib else 'no'} | cases: {len(sess.available_cases())}")
     if args.selftest:
         import os

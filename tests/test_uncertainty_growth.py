@@ -98,3 +98,11 @@ def test_virtual_growth_exact_on_thick_slices():
     new, gmask, info = virtual_growth(hu, vg, mask, s, -850.0, return_info=True)
     assert abs(info["added_mass_mg"] / ((s ** 3 - 1) * info["excess_mass_mg"]) - 1) < 0.03
     assert abs(gmask.sum() / mask.sum() - s ** 3) / s ** 3 < 0.2
+
+
+def test_ensemble_spread_ignores_members_that_found_nothing():
+    from medlift3d.uncertainty import ensemble_stats
+
+    st = ensemble_stats([100.0, 110.0, 90.0, 1e-6, 1e-6], min_value=1e-2)
+    assert st["n_found"] == 3 and st["log_std"] < 0.2          # not inflated by the two failed members
+    assert ensemble_stats([1e-6, 1e-6, 50.0], min_value=1e-2)["median"] < 1e-3   # mostly failed -> not found

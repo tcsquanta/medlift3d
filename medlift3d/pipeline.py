@@ -21,6 +21,7 @@ import torch
 
 from .data.cases import Case
 from .geometry import DTSGeometry, VolumeGeometry, bin_projections, depth_support
+from .growth import MIN_MEASURABLE
 from .measure import (mass_region, measure_ground_truth, measure_reconstruction, segment_nodule,
                       volume_mm3, gaussian_mass_mg)
 from .metrics import dice, hd95, psnr, ssim3d
@@ -295,15 +296,15 @@ def process_nodule(ctx: CaseContext, click_xyz, cfg: dict, model=None, diffusion
                 m.update({f"gs_{kk}": vv for kk, vv in extra[name][k].items()})
             per.append(m)
             masks.append(mask)
-        vol_stats = ensemble_stats([max(p["volume_mm3"], 1e-6) for p in per])
-        mass_stats = ensemble_stats([max(p["mass_mg"], 1e-6) for p in per])
+        vol_stats = ensemble_stats([max(p["volume_mm3"], 1e-6) for p in per], min_value=MIN_MEASURABLE)
+        mass_stats = ensemble_stats([max(p["mass_mg"], 1e-6) for p in per], min_value=MIN_MEASURABLE)
         vote = np.mean(masks, axis=0) >= 0.5
         mean_vol = np.mean(vols, axis=0)
         entry = {"volume_mm3": vol_stats["median"], "volume_log_std": vol_stats["log_std"],
                  "mass_mg": mass_stats["median"], "mass_log_std": mass_stats["log_std"],
                  "volume2d_mm3": float(np.median([p["volume2d_mm3"] for p in per])),
                  "d2d_long_mm": float(np.median([p["d2d_long_mm"] for p in per])),
-                 "n_members": len(vols), "members": per}
+                 "n_members": len(vols), "n_found": vol_stats["n_found"], "members": per}
         if name in fields:
             entry["mass_gauss_mg"] = float(np.median([p["mass_gauss_mg"] for p in per]))
             entry["volume_fine_mm3"] = float(np.median([p["volume_fine_mm3"] for p in per]))

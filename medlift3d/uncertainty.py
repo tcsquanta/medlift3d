@@ -20,13 +20,16 @@ from typing import Dict, Optional, Sequence, Tuple
 import numpy as np
 
 
-def ensemble_stats(values: Sequence[float]) -> Dict[str, float]:
+def ensemble_stats(values: Sequence[float], min_value: float = 0.0) -> Dict[str, float]:
+    """Ensemble summary. The median uses every member (a member that found nothing pulls it
+    towards 0); the log-spread uses only members above ``min_value`` (those that found a nodule),
+    so failed members do not blow up the interval; ``n_found`` counts them."""
     v = np.asarray(values, dtype=float)
-    pos = v[v > 0]
+    pos = v[v > min_value]
     lv = np.log(pos) if len(pos) else np.array([np.nan])
     return {"mean": float(v.mean()), "median": float(np.median(v)), "std": float(v.std(ddof=1)) if len(v) > 1 else 0.0,
             "log_mean": float(lv.mean()), "log_std": float(lv.std(ddof=1)) if len(lv) > 1 else 0.0,
-            "min": float(v.min()), "max": float(v.max()), "n": int(len(v))}
+            "min": float(v.min()), "max": float(v.max()), "n": int(len(v)), "n_found": int(len(pos))}
 
 
 def _order_stat(sorted_scores: np.ndarray, k: int) -> float:

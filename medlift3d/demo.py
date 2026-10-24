@@ -37,8 +37,11 @@ def eups_volume_category(v_mm3: float) -> str:
 
 
 class DemoSession:
-    def __init__(self, cfg: dict, device="cpu", ckpt: Optional[str] = None, calibration: Optional[str] = None):
+    def __init__(self, cfg: dict, device="cpu", ckpt: Optional[str] = None, calibration: Optional[str] = None,
+                 n_members: Optional[int] = None, display_scale: int = 3):
         self.cfg = cfg
+        self.n_members = n_members                 # hypotheses per click (None: config value)
+        self.display_scale = int(display_scale)    # coronal image is enlarged for clicking
         self.device = str(device)
         self.paths = Paths(cfg)
         self.model = self.diffusion = None
@@ -113,7 +116,8 @@ class DemoSession:
                 if abs(a["iy"] - iy) * vg.spacing[1] <= max(12.0, a["diameter_mm"]):
                     ring(a["iz"], a["ix"], max(4, int(round((0.5 * a["diameter_mm"] + 4.0) / vg.spacing[0]))),
                          [0.1, 0.9, 0.2])
-        return (rgb * 255).astype(np.uint8)
+        s = self.display_scale
+        return (np.repeat(np.repeat(rgb, s, axis=0), s, axis=1) * 255).astype(np.uint8)
 
     def annotations(self) -> List[Dict]:
         """Radiologist-annotated nodules of the loaded case (LIDC consensus; phantoms: true nodules)."""
@@ -128,7 +132,9 @@ class DemoSession:
         return out
 
     def pixel_to_world(self, row: int, col: int, iy: int) -> List[float]:
+        """Clicked pixel of the (enlarged) coronal image at depth slice ``iy`` -> world (x, y, z) mm."""
         vg = self.ctx.coarse_vg
+        row, col = int(row) // self.display_scale, int(col) // self.display_scale
         iz = (vg.shape[0] - 1) - row
         return [float(v) for v in vg.index_to_world(np.array([col, iy, iz], float))]
 
@@ -145,6 +151,7 @@ class DemoSession:
         return float(value * np.exp(-2 * sigma)), float(value * np.exp(2 * sigma)), how
 
     def analyze(self, click_xyz, n_members: Optional[int] = None) -> Dict:
+        n_members = n_members or self.n_members
         """Reconstruct + measure at the click. If the main method finds no nodule there, the
         physics-only method (roi_gs) is tried and the report says so in ``note``."""
         seed = stable_seed(self.ctx.case_id, *[round(c) for c in click_xyz])
@@ -167,7 +174,7 @@ class DemoSession:
                   "volume_interval": [v_lo, v_hi], "mass_mg": e["mass_mg"], "mass_interval": [m_lo, m_hi],
                   "interval_type": how, "d2d_long_mm": e["d2d_long_mm"],
                   "volume_fine_mm3": e.get("volume_fine_mm3"), "mass_gauss_mg": e.get("mass_gauss_mg"),
-                  "eups_category": eups_volume_category(e["volume_mm3"]), "n_members": e["n_members"],
+                  "eups_category": eups_volume_category(e["volume_mm3"]), "n_members": e["n_members"], "n_found": e.get("n_found", e["n_members"]),
                   "seconds": secs}
         self.last = {"res": res, "entry": e, "report": report, "click": list(click_xyz), "method": method}
         return report
