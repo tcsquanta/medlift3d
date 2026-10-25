@@ -142,6 +142,7 @@ where it left off.
    python scripts/06_reconstruct_sirt.py
    python scripts/07_build_roi_dataset.py --jitter 3 --negatives 2
    python scripts/08_train_diffusion.py --batch-size 8 --steps 40000      # ~3-4 h; resume with --resume
+   python scripts/14_train_detector.py                                   # nodule detector, ~10-20 min
    python scripts/09_run_pipeline.py --members 8
    python scripts/10_evaluate.py
    python scripts/11_growth_experiment.py --limit 40 --pairs-per-nodule 2
