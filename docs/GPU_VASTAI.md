@@ -2,33 +2,32 @@
 
 ## Which steps need which machine
 
-| step | script | needs | RTX 4090 (24 GB) estimate | free Kaggle T4 (16 GB) | CPU only |
-|---|---|---|---|---|---|
-| 0-1 | check env, physics checks | anything | 1 min | 2 min | 2-3 min |
-| smoke test | `smoke_test.py` | anything (CPU fine) | 10 min | 20 min | measured: 42 min (4 cores) |
-| 2 | select LIDC cases (annotations only) | CPU | 2-4 min | 2-4 min | 2-4 min |
-| 3 | download ~200 LIDC series (~22 GB) | **disk + bandwidth** | 30-90 min (TCIA speed) | disk limit is tight | measured: 4 series (0.45 GB) in 30 s |
-| 4 | DICOM -> cases | CPU / RAM | 40-80 min | 40-80 min | measured: ~23 s per case |
-| 5 | DTS simulation (200 cases) | GPU | ~5 min | ~15 min | measured: ~4 min per real CT (4 cores) |
-| 6 | coarse SIRT (200 cases) | GPU | ~15 min | ~45 min | many hours |
-| 7 | diffusion training pairs (~2000) | GPU | ~30-45 min | ~1.5-2.5 h | too slow |
-| **8** | **diffusion training (40k steps)** | **big GPU** | **~3-4 h (batch 8, bf16)** | ~10-14 h (batch 4, fp16) | no |
-| **9** | **all methods on ~150 held-out nodules (K = 8)** | **big GPU** | **~2-3 h** | ~6-8 h | no |
-| 10 | evaluation tables / figures | CPU | 1 min | 1 min | 1 min |
-| **11** | growth experiment (40 nodules x 2 follow-ups) | **big GPU** | ~1.5-2 h | ~5 h | no |
-| 12 | Gradio demo | GPU nice, CPU OK | instant click (~30-60 s / nodule) | similar | 2-5 min / nodule |
-| 13 | geometry sensitivity (12 nodules x 4 geometries, physics only) | GPU | ~20-40 min | ~1-2 h | many hours |
+| step | what | measured on Kaggle 2x T4, 40 patients | RTX 4090, 200 patients (estimate) |
+|---|---|---|---|
+| setup | clone, pip install, 00 check, unit tests | - | 15-20 min |
+| 2 | select patients (annotations only) | 6 min | ~6 min |
+| 3 | download CT (~22 GB for 200) | 2.4 min for 40 series (4.5 GB) | 15-60 min (TCIA speed) |
+| 4 | DICOM -> cases (CPU) | 10 min (15 s / case) | ~50 min |
+| 5 | DTS simulation | 3.6 min | 5-10 min |
+| 6 | coarse SIRT + candidates | 9 min | 15-20 min |
+| 7 | diffusion training pairs | 24 min | 40-60 min |
+| **8** | **diffusion training** | **0.96 s/step at batch 2 x 2 GPUs: 28,186 steps in 8.3 h** | **~0.6-0.9 s/step at batch 8: 30k steps 5-7.5 h, 40k steps 6.5-10 h** |
+| 14 | nodule detector | 22.5 min (one T4) | 10-15 min |
+| **9** | **all methods, K = 8, `--limit 150` nodules** | demo click with K = 4: 110-230 s | **3-5 h** (K = 4: about half) |
+| 10 | evaluation tables | ~1 min | ~1 min |
+| **11** | **growth, 20 nodules x 2 follow-ups** | - | **1.5-2.5 h** |
+| 13 | geometry sensitivity (optional) | 25 min (12 nodules x 4 geometries) | ~10-15 min |
+| 12 | demo self-test | - | ~10 min |
+| | **total** | | **~14-19 h, about $5-10 at $0.35-0.50/h** |
 
-These GPU times are **estimates**, not measurements. The CPU numbers in this table are
-measured in this repo; the GPU numbers come from the FLOP count of the 3D U-Net (~0.5
-TFLOP per 64x128x64 forward pass) and grid-sample throughput. Run `scripts/00_check_env.py` on the
-rented machine first: it prints the projector speed, and step 8 prints its `s/step` and ETA after
-50 steps. If the ETA is far off, change `--steps` / `--batch-size` accordingly.
+The RTX 4090 column scales our Kaggle measurements: a 4090 is assumed to train this 3D U-Net ~4-6x
+faster than one T4 (bf16, batch 8), and steps 4 and 7 grow with the number of patients (5x). Step 8
+prints its `s/step` after 50 steps: check it and set `--max-hours` to fit your budget. An H100 / A100
+(80 GB) is ~1.5-3x faster than a 4090 (total ~8-11 h, but ~$1-2.5/h).
 
-**Recommendation:** do *everything* from step 3 onwards on one Vast.ai RTX 4090 instance
-(~8-11 GPU hours in total, about $3-5 at $0.30-0.45/h). Kaggle's 20 GB `/kaggle/working`
-limit is too small for the DICOM download, and its 12 h session limit is short for step 8.
-Use Kaggle or your laptop only for the smoke test and code checks.
+**Recommendation:** do *everything* from step 2 onwards on one Vast.ai RTX 4090 instance and cap step 8
+with `--max-hours` (e.g. 6). Kaggle's 20 GB `/kaggle/working` limit is too small for 200 patients'
+DICOM, and its 12 h session limit is short for step 8. Use Kaggle or your laptop for the smoke test and code checks.
 
 ## Kaggle (free): environment check + 10-patient pilot, before paying for Vast.ai
 
@@ -141,12 +140,13 @@ where it left off.
    python scripts/05_simulate_dts.py
    python scripts/06_reconstruct_sirt.py
    python scripts/07_build_roi_dataset.py --jitter 3 --negatives 2
-   python scripts/08_train_diffusion.py --batch-size 8 --steps 40000      # ~3-4 h; resume with --resume
-   python scripts/14_train_detector.py                                   # nodule detector, ~10-20 min
-   python scripts/09_run_pipeline.py --members 8
+   python scripts/08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours 6   # stops at 6 h; resume with --resume
+   python scripts/14_train_detector.py                                   # nodule detector, ~10-15 min
+   python scripts/09_run_pipeline.py --members 8 --limit 150             # ~3-5 h
    python scripts/10_evaluate.py
-   python scripts/11_growth_experiment.py --limit 40 --pairs-per-nodule 2
-   python scripts/13_geometry_sensitivity.py --limit 20                 # views / sweep angle sensitivity
+   python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2   # ~1.5-2.5 h
+   python scripts/12_demo_app.py --selftest
+   python scripts/13_geometry_sensitivity.py --limit 20                 # optional
    ```
 5. **Save results before destroying the instance** (storage keeps costing money):
    `outputs/` (all figures + tables), `work/results/*.jsonl`, `work/models/diffusion/best.pt`,
