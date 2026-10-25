@@ -206,15 +206,18 @@ def main():
     save_detector(best_path, model, int(model.e1[0].out_channels), extra)          # demo reads the threshold
     test_res = evaluate(model, data["test"], dev, top_k)
     rl, rb = froc(test_res), froc(baseline_log(data["test"], top_k))
+    r2d = froc(test_res, depth_tol_mm=1e9)                  # diagnostic: right place in-plane, any depth
     lines = ["| detector (test patients) | CPM | sensitivity at 1 / 2 / 4 / 8 FP per scan | recall top-10 | nodules / scans |",
              "|---|---|---|---|---|"]
-    for name, r in (("learned 3D U-Net (ours)", rl), ("training-free LoG + Hessian", rb)):
+    for name, r in (("learned 3D U-Net (ours)", rl), ("training-free LoG + Hessian", rb),
+                    ("learned, in-plane only (any depth; diagnostic)", r2d)):
         s = r["sensitivity"]
         lines.append(f"| {name} | {r['cpm']:.3f} | {100 * s[1.0]:.0f}% / {100 * s[2.0]:.0f}% / {100 * s[4.0]:.0f}% / "
                      f"{100 * s[8.0]:.0f}% | {100 * r['recall_top10']:.0f}% | {r['n_nodules']} / {r['n_scans']} |")
     note = ("A suggestion finds a nodule if it lies within max(6 mm, radius + 3 mm) in-plane and 12 mm + radius in depth "
             "(where the measurement searches). Only LIDC nodules marked by >= 3 radiologists and 4-30 mm are labels; "
-            "suggestions on other real findings count as false positives.")
+            "suggestions on other real findings count as false positives. The diagnostic row ignores depth: the gap to "
+            "the first row is suggestions in the right coronal position but at the wrong depth (the DTS depth smear).")
     text = "\n".join(lines) + "\n\n" + note + "\n"
     print("\n" + text)
     with open(os.path.join(out, "table_detection.md"), "w") as f:
@@ -227,6 +230,8 @@ def main():
     ck.info("operating threshold (2 FP per scan on the cal patients)", f"{thr:.3f}")
     ck.info("learned vs training-free detector on test patients: CPM", f"{rl['cpm']:.3f} vs {rb['cpm']:.3f}")
     ck.info("recall within the top 10 suggestions (test)", f"{100 * rl['recall_top10']:.0f}% vs {100 * rb['recall_top10']:.0f}%")
+    ck.info("diagnostic: learned detector, in-plane position only (any depth): CPM / recall top-10",
+            f"{r2d['cpm']:.3f} / {100 * r2d['recall_top10']:.0f}%")
     ck.info("table", os.path.join(out, "table_detection.md"))
     ck.finish(out)
 

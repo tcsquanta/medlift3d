@@ -96,7 +96,13 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 ## Step 12 - demo (`12_demo_app.py`)
 * `--selftest`: loads a test patient, analyses a nodule, builds the 3D mesh, simulates a follow-up, builds
   the UI and clicks through it: AI suggestions, ground truth on request, "Reconstruct in 3D" on suggestion #1
-  (report with the radiologists' values next to ours), a click on the nodule, the follow-up button. `INFO method used` says which method produced the result: if the
+  (report with the radiologists' values next to ours), a click on the nodule, the follow-up button.
+  The 3D check tests the coordinates (the radiologists' surface sits on the annotated nodule); how close our
+  reconstruction is to it is reported as INFO (an accuracy result, e.g. a juxtapleural nodule the diffusion
+  model cannot separate from the chest wall, not a code error).
+* The report lists every hypothesis (mass / volume, or "nothing"), says why a method found nothing ("too faint"
+  or "merged with an adjacent structure"), and flags **low confidence** when most hypotheses found nothing or
+  they disagree by more than 10x. `INFO method used` says which method produced the result: if the
   diffusion model finds no nodule at a click, the demo shows the physics-only result and says so.
 * Intervals are "calibrated 90%" after step 10 with >= 19 calibration nodules, otherwise labelled
   "uncalibrated +-2 sd".
@@ -114,6 +120,11 @@ positives per scan) chosen on the *cal* patients, evaluated once on the *test* p
   in-plane and 12 mm + r in depth: a click there lets the measurement find the nodule).
 * LIDC labels only nodules >= 4 mm marked by >= 3 of 4 radiologists: a suggestion on another real finding
   counts as a false positive, so the false-positive numbers are pessimistic.
+* Diagnostic row "in-plane only (any depth)": the gap to the first row = suggestions at the right coronal
+  position but the wrong depth. `--eval-only` re-evaluates the saved detector without training (~1 min).
+* Measured (40-patient Kaggle run, Oct 25): test CPM 0.155 vs 0.024 for the training-free detector; recall in
+  the top 10: 26% vs 11%; sensitivity 17% at 2 FP per scan. The cal CPM peaked at step 1000 (0.176) while the
+  training loss kept falling: with 24 training patients the detector overfits; best.pt is the step-1000 model.
 * The demo (step 12) uses `work/models/detector/best.pt` automatically when it exists.
 
 ## Step 13 - acquisition geometry (`13_geometry_sensitivity.py`)

@@ -27,6 +27,18 @@ from .simulate import add_noise
 from .uncertainty import ConformalCalibrator
 
 
+def member_reason(m: Dict, min_contrast_hu: float = 50.0) -> str:
+    """Why a hypothesis' segmentation is empty (or 'found')."""
+    if m.get("volume_mm3", 0.0) > MIN_MEASURABLE:
+        return "found"
+    if m.get("touches_limit"):
+        return "merged with an adjacent structure (chest wall / mediastinum / vessel)"
+    pk, base = m.get("peak_hu", float("nan")), m.get("baseline_hu", float("nan"))
+    if np.isfinite(pk) and np.isfinite(base):
+        return f"too faint (peak {pk - base:.0f} HU above lung, needs {2 * min_contrast_hu:.0f})"
+    return "nothing at the click"
+
+
 def eups_volume_category(v_mm3: float) -> str:
     """European Position Statement volume categories for a solid baseline nodule."""
     if v_mm3 < 100:
@@ -216,15 +228,22 @@ class DemoSession:
         res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
                              seed=seed, keep_volumes=True)
         secs = res["timing_s"]["total"]
+        mcfg = self.cfg["measure"]
         if res["methods"][method]["volume_mm3"] <= MIN_MEASURABLE and method != "roi_gs":
-            note = f"{method} found no nodule at the click; showing the physics-only result (roi_gs)"
+            why = sorted({member_reason(m, float(mcfg.get("min_contrast_hu", 50.0)))
+                          for m in res["methods"][method]["members"]} - {"found"})
+            note = (f"{method} found no nodule at the click ({'; '.join(why)}); showing the physics-only "
+                    "result (roi_gs) -- treat it with caution")
             method = "roi_gs"
             res = process_nodule(self.ctx, click_xyz, self.cfg, self.model, self.diffusion, [method], n_members,
                                  seed=seed, keep_volumes=True)
             secs += res["timing_s"]["total"]
         e = res["methods"][method]
+        members = [{"volume_mm3": float(m["volume_mm3"]), "mass_mg": float(m["mass_mg"]),
+                    "reason": member_reason(m, float(mcfg.get("min_contrast_hu", 50.0)))} for m in e["members"]]
         if e["volume_mm3"] <= MIN_MEASURABLE:
-            note = "no nodule found at the click (contrast too low or not a nodule)"
+            why = sorted({m["reason"] for m in members} - {"found"})
+            note = f"no nodule measured at the click: {'; '.join(why) or 'nothing found'}"
         v_lo, v_hi, how = self._interval(e["volume_mm3"], e["volume_log_std"], "volume", method)
         m_lo, m_hi, _ = self._interval(e["mass_mg"], e["mass_log_std"], "mass", method)
         report = {"method": method, "note": note, "click_xyz": click_xyz, "volume_mm3": e["volume_mm3"],
@@ -232,7 +251,9 @@ class DemoSession:
                   "interval_type": how, "d2d_long_mm": e["d2d_long_mm"],
                   "volume_fine_mm3": e.get("volume_fine_mm3"), "mass_gauss_mg": e.get("mass_gauss_mg"),
                   "eups_category": eups_volume_category(e["volume_mm3"]), "n_members": e["n_members"], "n_found": e.get("n_found", e["n_members"]),
-                  "seconds": secs}
+                  "seconds": secs, "members": members, "spread_factor": float(np.exp(2 * e["mass_log_std"])),
+                  "low_confidence": bool(e.get("n_found", e["n_members"]) < 0.5 * e["n_members"] + 0.01
+                                         or np.exp(2 * max(e["mass_log_std"], e["volume_log_std"])) > 10.0)}
         self.last = {"res": res, "entry": e, "report": report, "click": list(click_xyz), "method": method}
         return report
 

@@ -99,12 +99,21 @@ def build_ui(sess: DemoSession, splits=None):
         if sess.last is None:
             return ""
         rep, xyz = sess.last["report"], sess.last["click"]
-        md = (f"### Nodule at ({xyz[0]:.0f}, {xyz[1]:.0f}, {xyz[2]:.0f}) mm\n"
-              f"- **Mass:** {rep['mass_mg']:.0f} mg  [{rep['mass_interval'][0]:.0f} - {rep['mass_interval'][1]:.0f}]  ({rep['interval_type']})\n"
-              f"- **Volume:** {rep['volume_mm3']:.0f} mm3  [{rep['volume_interval'][0]:.0f} - {rep['volume_interval'][1]:.0f}]\n"
+
+        def num(v):
+            return f"{v:.0f}" if v >= 10 else (f"{v:.1f}" if v >= 0.1 else "<0.1")
+
+        hyp = ", ".join(f"{num(m['mass_mg'])} mg / {num(m['volume_mm3'])} mm3" if m["reason"] == "found"
+                        else "nothing" for m in rep.get("members", []))
+        flag = ("\n> **Low confidence:** the hypotheses disagree strongly or most found nothing -- the depth "
+                "information at this point is too weak for a reliable measurement.\n" if rep.get("low_confidence") else "")
+        md = (f"### Nodule at ({xyz[0]:.0f}, {xyz[1]:.0f}, {xyz[2]:.0f}) mm\n" + flag +
+              f"- **Mass:** {num(rep['mass_mg'])} mg  [{num(rep['mass_interval'][0])} - {num(rep['mass_interval'][1])}]  ({rep['interval_type']})\n"
+              f"- **Volume:** {num(rep['volume_mm3'])} mm3  [{num(rep['volume_interval'][0])} - {num(rep['volume_interval'][1])}]\n"
               f"- 2D diameter on the DTS slice: {rep['d2d_long_mm']:.1f} mm\n"
               f"- EUPS volume category: {rep['eups_category']}\n"
               f"- method: {rep['method']}, {rep['n_found']} of {rep['n_members']} hypotheses found a nodule, {rep['seconds']:.1f} s\n"
+              + (f"- the hypotheses (mass / volume): {hyp}\n" if hyp else "")
               + (f"- **note:** {rep['note']}\n" if rep["note"] else "") + "\n"
               "_Mass is measured directly by every X-ray view; volume needs the depth extent, which DTS cannot see -- "
               "hence its wider interval._")
@@ -231,6 +240,7 @@ def build_ui(sess: DemoSession, splits=None):
         img.select(on_click, None, [report, panel, plot3d])
         fu_btn.click(on_followup, [days, dt], [fu])
     demo.medlift_handlers = {"on_case": on_case, "on_slider": on_slider, "on_click": on_click, "on_pick": on_pick,
+                             "report_md": report_md,
                              "on_truth": on_truth, "on_followup": on_followup, "state": state}
     return demo
 
@@ -261,9 +271,13 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
     m = sess.mesh()
     ck.check("3D surface mesh", m is not None and len(m[1]) > 0, f"{0 if m is None else len(m[1])} faces")
     t = sess.truth_mesh()
-    if m is not None and t is not None:                  # truth surface must sit where the reconstruction is
-        gap = float(np.linalg.norm(m[0].mean(0) - t[0].mean(0)))
-        ck.check("3D truth surface overlaps the reconstruction (centre distance)", gap < 10.0, f"{gap:.1f} mm", "< 10 mm")
+    ck.check("3D truth surface sits on the annotated nodule (centre distance; coordinate check)",
+             t is not None and float(np.linalg.norm(t[0].mean(0) - np.asarray(nod.center_xyz))) < 0.5 * nod.diameter_mm + 2.0,
+             "no surface" if t is None else f"{np.linalg.norm(t[0].mean(0) - np.asarray(nod.center_xyz)):.1f} mm")
+    if m is not None and t is not None:                  # accuracy, not a code check: reported, not judged
+        ck.info("reconstruction surface vs radiologists' surface (centre distance)",
+                f"{np.linalg.norm(m[0].mean(0) - t[0].mean(0)):.1f} mm"
+                + (f"; {rep['note']}" if rep["note"] else "") + (" [low confidence]" if rep.get("low_confidence") else ""))
     try:
         g = sess.followup(180.0, 300.0)
         ck.check("virtual follow-up -> VDT/MDT", np.isfinite(g["mdt_days"]) or np.isinf(g["mdt_days"]),

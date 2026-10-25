@@ -129,6 +129,10 @@ Measured with the pipeline before the GPU run (useful for Ch.4 / the defense):
   40 or 120 iterations or relaxation 1.9. The depth smear and clutter, not convergence or dose, limit
   physics-only DTS; this is the gap the learned prior has to close (H2).
 * The training-free candidate detector found mostly end-on vessels (recall@10 6%).
+* Learned detector (step 14, 40-patient Kaggle run, Oct 25; 24 train / 8 cal / 8 test patients, 47 test
+  nodules): test CPM 0.155 vs 0.024 for the training-free detector, recall within the top 10 suggestions 26% vs
+  11%, sensitivity 17% at 2 false positives per scan. Validation CPM peaked after 1000 of 6000 steps while
+  the training loss kept falling (overfitting on 148 training nodules): more patients is the main lever.
 
 ## 6. Limitations (state them in the report)
 
