@@ -50,6 +50,14 @@ class DemoSession:
             from .diffusion.checkpoint import load_for_sampling
 
             self.model, self.diffusion, _ = load_for_sampling(ckpt, device=self.device)
+        self.detector, self.det_threshold = None, 0.0
+        det_ckpt = os.path.join(cfg["paths"]["work"], "models", "detector", "best.pt")
+        if os.path.exists(det_ckpt):                       # learned detector (step 14); else training-free LoG
+            from .detector import load_detector
+
+            self.detector, extra = load_detector(det_ckpt, device=self.device)
+            self.det_threshold = float(extra.get("threshold", 0.0))
+        self.detector_name = "learned detector (step 14)" if self.detector is not None else "training-free LoG detector"
         self.method = "diffusion_gs" if self.model is not None else "roi_gs"
         cal = calibration or os.path.join(cfg["paths"]["outputs"], "10_evaluation", "conformal.json")
         self.calib = json.load(open(cal)) if os.path.exists(cal) else {}
@@ -68,9 +76,11 @@ class DemoSession:
             self._splits = json.load(open(p)).get("cases", {}) if os.path.exists(p) else {}
         return self._splits.get(case_id, "?")
 
-    def available_cases(self) -> List[str]:
-        """Cases with a DTS reconstruction, held-out (test, then calibration) patients first."""
-        ids = [c for c in self.paths.case_ids() if os.path.exists(self.paths.sirt(c))]
+    def available_cases(self, splits: Optional[List[str]] = None) -> List[str]:
+        """Cases with a DTS reconstruction (only those ``splits`` if given), held-out (test, then
+        calibration) patients first."""
+        ids = [c for c in self.paths.case_ids() if os.path.exists(self.paths.sirt(c))
+               and (splits is None or self.case_split(c) in splits)]
         return sorted(ids, key=lambda c: (self.SPLIT_ORDER.get(self.case_split(c), 3), c))
 
     def load_case(self, case_id: str) -> None:
@@ -92,8 +102,41 @@ class DemoSession:
         rec = self.ctx.coarse_hu
         sel = (rec > -1000) & (rec < -600)
         lung = float(np.median(rec[sel])) if sel.any() else -850.0
-        self.candidates = detect_candidates(rec, self.ctx.coarse_vg, baseline_hu=lung, top_k=10)
+        top_k = int(self.cfg.get("detector", {}).get("top_k", 10))
+        if self.detector is not None:
+            from .detector import detect_learned
+
+            self.candidates = detect_learned(self.detector, rec, self.ctx.coarse_vg, self.device, top_k=top_k)
+        else:
+            self.candidates = detect_candidates(rec, self.ctx.coarse_vg, baseline_hu=lung, top_k=top_k)
+        from .detector import match_candidates
+
+        ann = self.annotations()
+        for c, j in zip(self.candidates, match_candidates(self.candidates, ann)):
+            c["match"] = None if j is None else ann[j]["index"]          # radiologists' nodule it finds, if any
+            c["suggested"] = self.detector is None or c["score"] >= self.det_threshold
         self.last = None
+
+    def detection_summary(self) -> Dict:
+        """How the suggestions compare with the radiologists' nodules of the loaded case."""
+        ann = self.annotations()
+        found = sorted({c["match"] for c in self.candidates if c.get("match") is not None})
+        first = {}
+        for k, c in enumerate(self.candidates, start=1):
+            if c.get("match") is not None:
+                first.setdefault(c["match"], k)
+        return {"n_nodules": len(ann), "found": found, "missed": [a["index"] for a in ann if a["index"] not in found],
+                "n_false": sum(c.get("match") is None for c in self.candidates), "n_suggestions": len(self.candidates),
+                "rank_of_nodule": first}
+
+    def ground_truth_at(self, click_xyz, max_mm: float = 15.0) -> Optional[Dict]:
+        """Radiologists' ground truth (volume, mass, diameter) of the nodule nearest the click."""
+        j = self.nearest_nodule(click_xyz, max_mm=max_mm)
+        if j is None:
+            return None
+        roi = ROI.from_config(self.case.nodules[j].center_xyz, self.cfg["roi"], self.ctx.geom)
+        g = ground_truth_for_roi(self.case, j, roi, self.cfg["measure"])["meas"]
+        return {"index": j, "diameter_mm": float(self.case.nodules[j].diameter_mm), **g}
 
     # ----------------------------------------------------------------- slices
     @property
@@ -103,9 +146,11 @@ class DemoSession:
     def depth_mm(self, iy: int) -> float:
         return float(self.ctx.coarse_vg.index_to_world(np.array([0, iy, 0], float))[1])
 
-    def coronal_image(self, iy: int, with_candidates: bool = True, with_annotations: bool = True) -> np.ndarray:
+    def coronal_image(self, iy: int, with_candidates: bool = True, with_annotations: bool = True,
+                      selected: Optional[int] = None) -> np.ndarray:
         """RGB uint8 coronal DTS slice (superior at the top); detector candidates near this depth
-        in yellow, radiologist-annotated nodules (LIDC ground truth) near this depth in green."""
+        in yellow (the ``selected`` one in cyan), radiologist-annotated nodules (LIDC ground truth)
+        near this depth in green."""
         vol = self.ctx.coarse_hu
         vg = self.ctx.coarse_vg
         iy = int(np.clip(iy, 0, vol.shape[1] - 1))
@@ -118,10 +163,11 @@ class DemoSession:
             rgb[np.abs(np.hypot(yy - r, xx - ix) - rad) < 0.8] = colour
 
         if with_candidates:
-            for c in self.candidates:
+            for k, c in enumerate(self.candidates):
                 iz, cy, ix = c["index_zyx"]
                 if abs(cy - iy) * vg.spacing[1] <= 12.0:
-                    ring(iz, ix, max(3, int(round(2.5 * c["sigma_mm"] / vg.spacing[0]))), [1.0, 0.85, 0.0])
+                    ring(iz, ix, max(3, int(round(2.5 * c["sigma_mm"] / vg.spacing[0]))),
+                         [0.0, 0.9, 1.0] if k == selected else [1.0, 0.85, 0.0])
         if with_annotations:
             for a in self.annotations():
                 if abs(a["iy"] - iy) * vg.spacing[1] <= max(12.0, a["diameter_mm"]):

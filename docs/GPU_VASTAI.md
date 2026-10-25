@@ -40,7 +40,7 @@ Ten patients (~1.1 GB of DICOM) fit easily in `/kaggle/working`. Paste into cell
 %cd medlift3d
 !pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
 !python scripts/00_check_env.py                       # GPU listed? projector speed?
-!python -m pytest -q                                  # 52 tests, all must pass
+!python -m pytest -q                                  # 56 tests, all must pass
 !python scripts/02_select_lidc.py --n-patients 10
 !python scripts/03_download_lidc.py --workers 4
 !python scripts/04_prepare_cases.py --source lidc
@@ -89,15 +89,19 @@ Output Files** -> your committed notebook, then:
 !git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
 %cd medlift3d
 !pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
-!cp -r /kaggle/input/<your-notebook-name>/medlift3d/work work        # path: look in the input panel
+!rm -rf work && cp -r /kaggle/input/<your-notebook-name>/medlift3d/work work   # path: look in the input panel
+!python scripts/14_train_detector.py                                # nodule detector, ~15-30 min; ALL PASS
 !python scripts/12_demo_app.py --selftest                           # must end ALL PASS
 !python scripts/12_demo_app.py --share                              # open the printed gradio.live link
 ```
 
-In the demo pick a case, find the green circle (the radiologists' nodule), click it. If the model
-finds nothing at the click it says so and shows the physics-only result. Stop the session when done:
-it counts against your ~30 GPU hours per week. (The demo's mass numbers share the window problem
-described in the project notes for step 9; do not quote them as results yet.)
+The demo offers only *test* patients (never seen in training). Pick one: the detector suggests possible
+nodules (yellow). Pick a suggestion and press **Reconstruct in 3D** (or click anywhere on the slice).
+Then tick **show radiologists' ground truth** to see the green LIDC nodules, which suggestions were real,
+and the radiologists' mass / volume next to MedLift-3D's. If the diffusion model finds nothing at a point it
+says so and shows the physics-only result. Without step 14 the demo falls back to the training-free
+detector. Stop the session when done: it counts against your ~30 GPU hours per week. Keep
+`work/models/detector/` (Save Version) so the next demo session does not need to retrain it.
 
 This does not include steps 9-11 (evaluation tables, calibrated intervals, growth): they need a
 trained model and take hours on a T4, so run them on the rented GPU, or in a second session.

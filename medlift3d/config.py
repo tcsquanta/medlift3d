@@ -99,6 +99,20 @@ DEFAULTS: Dict[str, Any] = {
         "dc_iters": 2,                      # SIRT data-consistency iterations per DDIM step
         "dc_start_frac": 0.5,               # apply DC in the last 50% of DDIM steps
     },
+    "detector": {                           # learned nodule detector on the coarse DTS volume (step 14)
+        "base_ch": 16,
+        "patch_vox": [64, 64, 64],          # (z, y, x) training patch, 160 mm at 2.5 mm voxels
+        "batch_size": 8,
+        "steps": 6000,
+        "lr": 1.0e-3,
+        "pos_frac": 0.6,                    # share of patches containing a nodule
+        "min_sigma_mm": 2.5,                # heatmap blob size: max(this, d/4) in-plane
+        "depth_factor": 2.0,                # heatmap blob / NMS footprint longer in depth (DTS blur)
+        "val_every": 500,
+        "eval_top_k": 50,                   # candidates per scan for FROC
+        "fp_per_scan": 2.0,                 # operating point set on the cal patients
+        "top_k": 10,                        # suggestions shown in the demo
+    },
     "pipeline": {
         "n_members": 8,                     # ensemble size K (diffusion methods)
         "n_members_physics": 4,             # ensemble size for the physics-only Gaussian baseline

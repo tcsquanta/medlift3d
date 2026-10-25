@@ -27,7 +27,7 @@ nodule box --> mass (closed form) / volume (continuous field) --> conformal inte
 
 ```bash
 pip install -r requirements.txt          # on Kaggle / Vast.ai keep the preinstalled torch
-python -m pytest -q                      # 52 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
+python -m pytest -q                      # 56 unit tests: physics, Gaussians, measurement, diffusion, LIDC masks, DICOM, download, pipeline
 python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic phantoms (CPU, ~45 min on 4 cores)
 ```
 
@@ -53,6 +53,7 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 10 | `python scripts/10_evaluate.py` | accuracy tables, calibrated intervals, H1-H3 |
 | 11 | `python scripts/11_growth_experiment.py` | virtual follow-up scans: VDT vs MDT, H4 |
 | 12 | `python scripts/12_demo_app.py --share` | interactive click-to-3D demo (Gradio) |
+| 14 | `python scripts/14_train_detector.py` | train the nodule detector on the DTS volume (train patients), FROC on test patients; the demo suggests its detections |
 | 13 | `python scripts/13_geometry_sensitivity.py --limit 12` | same nodules with 60 views / a 40 deg sweep: how much the 15-view, 30 deg choice matters |
 
 ### Why LIDC-IDRI
@@ -76,7 +77,8 @@ medlift3d/            library
   measure.py          segmentation, volume, mass, 2D diameter
   uncertainty.py      ensembles, split-conformal intervals, sparsification
   growth.py           virtual growth, VDT/MDT, NELSON categories
-  detect.py           training-free candidate detector
+  detect.py           training-free candidate detector (LoG + Hessian; baseline)
+  detector.py         learned nodule detector (3D U-Net heatmap, FROC / CPM evaluation)
   pipeline.py         end-to-end per-nodule processing (all methods)
   data/               LIDC-IDRI (pylidc + DICOM), LUNA16, cases
   demo.py             demo backend
@@ -89,5 +91,5 @@ docs/                 PROPOSAL, VERIFY, GPU_VASTAI
 ## Limitations
 
 Simulation study: no public chest DTS + CT dataset exists. Monochromatic X-rays, no scatter.
-Virtual growth is isotropic. The candidate detector is training-free and modest. Radiologist
+Virtual growth is isotropic. The nodule detector is trained on few patients (24 in the 40-patient run). Radiologist
 "ground truth" varies between readers (reported as context).

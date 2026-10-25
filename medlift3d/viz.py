@@ -122,6 +122,27 @@ def save_parallax_figure(path: str, proj: np.ndarray, marks: np.ndarray, title: 
     return _save(fig, path)
 
 
+def save_froc(path: str, curves: Dict[str, tuple], title: str, max_fp: float = 8.0) -> str:
+    """FROC curves: {name: (false positives per scan, sensitivity)}, log x axis 1/8 .. 8."""
+    fig, a = plt.subplots(figsize=(5.5, 3.8))
+    for k, (fp, se) in curves.items():
+        fp, se = np.asarray(fp, float), np.asarray(se, float)
+        ok = (fp > 0) & (fp <= max_fp)
+        a.step(np.r_[0.125, fp[ok], max_fp], np.r_[se[fp <= 0.125].max() if (fp <= 0.125).any() else 0.0,
+                                                     se[ok], se[fp <= max_fp].max() if (fp <= max_fp).any() else 0.0],
+               where="post", label=k)
+    a.set_xscale("log", base=2)
+    a.set_xlim(0.125, max_fp)
+    a.set_xticks([0.125, 0.25, 0.5, 1, 2, 4, 8], ["1/8", "1/4", "1/2", "1", "2", "4", "8"])
+    a.set_ylim(0, 1)
+    a.set_xlabel("false positives per scan")
+    a.set_ylabel("sensitivity")
+    a.set_title(title, fontsize=10)
+    a.grid(alpha=0.3)
+    a.legend(fontsize=8)
+    return _save(fig, path)
+
+
 def save_curve(path: str, ys: Dict[str, Sequence[float]], title: str, xlabel: str = "iteration",
                ylabel: str = "", logy: bool = False) -> str:
     fig, a = plt.subplots(figsize=(5.5, 3.6))

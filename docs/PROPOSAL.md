@@ -60,7 +60,8 @@ Any of these can come out false. The report must state whichever results we actu
    here the CT body outline + 5 mm). Without this support DTS smears attenuation into the air in front of and
    behind the patient, and on real LIDC chests the prism then lost ~1/3 of its attenuation as false
    "background". The doctor scrolls coronal slices;
-   a training-free LoG + Hessian blob detector suggests candidates; the click gives (x, z) and the slice gives depth y.
+   a nodule detector (a small 3D U-Net heatmap trained on the train patients' LIDC nodules, step 14;
+   baseline: a training-free LoG + Hessian blob detector) suggests candidates; the click gives (x, z) and the slice gives depth y.
 4. **Prism ROI ("zoom in-plane, not in depth"):** a 64 x 64 mm column through the whole chest
    (64 x 128 x 64 voxels, 1 x 2 x 1 mm; shifted back for deep nodules in thick chests). Rays are kept only
    if >= 50% of their attenuation lies in the prism, so the out-of-prism background (from the coarse SIRT)
@@ -133,9 +134,10 @@ Measured with the pipeline before the GPU run (useful for Ch.4 / the defense):
   tested on the 15-view, 30 deg geometry only.
 * Virtual growth is isotropic scaling; real nodules grow irregularly.
 * LIDC "ground truth" is itself variable between radiologists (we report reader CV).
-* The candidate detector is training-free and modest (on the first real LIDC patients it mostly found
-  end-on vessels: recall@10 0-11%). The clinician can click anywhere; the demo also marks the
-  radiologists' annotated nodules. A trained detector is future work.
+* The nodule detector is trained on few patients (24 train patients, ~150 nodules in the 40-patient run)
+  on simulated DTS; the training-free baseline mostly found end-on vessels (recall@10 0-11%). LIDC labels
+  only nodules >= 4 mm marked by >= 3 radiologists, so suggestions on other real findings count as false
+  positives. The clinician can always click anywhere.
 * The patient's antero-posterior thickness is assumed known (it bounds the reconstruction in depth);
   here it comes from the CT body outline. CT field of view limits the simulated chest (rays outside
   the CT see air).

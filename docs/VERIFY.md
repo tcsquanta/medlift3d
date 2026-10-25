@@ -12,7 +12,7 @@ and writes `outputs/<step>/verification.md` + `verification.json` and figures. A
 code check means something is wrong: stop and look before continuing. Lines starting with
 **H1-H4** are *scientific results*, not code checks; they may honestly come out either way.
 
-Run the unit tests any time: `python -m pytest -q` (52 tests, about 5-10 min on CPU).
+Run the unit tests any time: `python -m pytest -q` (56 tests, about 5-10 min on CPU).
 
 ## Step 0 - environment (`00_check_env.py`)
 * PASS: torch, numpy, scipy, scikit-image, matplotlib, yaml, pydicom import; pylidc database has 1018 scans.
@@ -94,12 +94,27 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * `--limit` is the total number of nodules: re-running with the same limit only rebuilds the tables.
 
 ## Step 12 - demo (`12_demo_app.py`)
-* `--selftest`: loads a case, analyses a nodule, builds the 3D mesh, simulates a follow-up, builds the
-  UI and clicks through it (9 checks). `INFO method used` says which method produced the result: if the
+* `--selftest`: loads a test patient, analyses a nodule, builds the 3D mesh, simulates a follow-up, builds
+  the UI and clicks through it: AI suggestions, ground truth on request, "Reconstruct in 3D" on suggestion #1
+  (report with the radiologists' values next to ours), a click on the nodule, the follow-up button. `INFO method used` says which method produced the result: if the
   diffusion model finds no nodule at a click, the demo shows the physics-only result and says so.
 * Intervals are "calibrated 90%" after step 10 with >= 19 calibration nodules, otherwise labelled
   "uncalibrated +-2 sd".
 * `python scripts/12_demo_app.py --share` -> public link for the defense.
+
+## Step 14 - nodule detector (`14_train_detector.py`)
+A small 3D U-Net (0.34 M parameters) learns a nodule-centre heatmap on the coarse DTS volume from the LIDC
+radiologists' nodules: trained on the *train* patients, checkpoint and operating threshold (2 false
+positives per scan) chosen on the *cal* patients, evaluated once on the *test* patients.
+* PASS: the three patient groups are disjoint, the training loss decreases, a checkpoint is saved.
+* `[val] step ...: CPM ...` lines during training: CPM = mean sensitivity at 1/8 ... 8 false positives per
+  scan (LUNA16); it should rise above the first check.
+* `table_detection.md` + `froc_test.png` (scientific, report as it comes out): learned detector vs the
+  training-free LoG detector on the same test patients and the same hit rule (within max(6 mm, r + 3 mm)
+  in-plane and 12 mm + r in depth: a click there lets the measurement find the nodule).
+* LIDC labels only nodules >= 4 mm marked by >= 3 of 4 radiologists: a suggestion on another real finding
+  counts as a false positive, so the false-positive numbers are pessimistic.
+* The demo (step 12) uses `work/models/detector/best.pt` automatically when it exists.
 
 ## Step 13 - acquisition geometry (`13_geometry_sensitivity.py`)
 Our DTS uses 15 views over a 30 deg linear sweep: the angular range of the GE VolumeRAD chest unit, but

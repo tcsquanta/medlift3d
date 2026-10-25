@@ -45,6 +45,13 @@ diffusion:
   dc_iters: 1
   dc_start_frac: 0.5
 
+detector:
+  base_ch: 8
+  patch_vox: [32, 32, 32]
+  batch_size: 2
+  steps: 200
+  val_every: 100
+
 pipeline:
   n_members: 3
   n_members_physics: 2
