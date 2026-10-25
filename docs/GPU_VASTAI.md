@@ -117,6 +117,22 @@ It re-simulates each patient 4 times (15, 60, 15 and 74 views; the log prints th
 time per case) and keeps the results in `work/results/geometry.jsonl`, so a stopped run continues
 where it left off.
 
+## How many patients?
+
+1,010 LIDC patients exist, but only **583** have a qualifying nodule (4-30 mm, >= 3 readers, slices <= 2.5 mm);
+the others add no nodule labels. Step 2 takes the most nodule-rich patients first (counted from the
+annotation database):
+
+| patients | qualifying nodules | share | RTX 4090 total time (estimate) | DICOM download |
+|---|---|---|---|---|
+| 40 (Kaggle run) | 246 | 22% | - | 4.5 GB |
+| 200 | 681 | 60% | ~14-17 h | ~22 GB |
+| 300 | 861 | 75% | ~16-20 h | ~33 GB |
+| 583 (all) | 1,144 | 100% | ~18-24 h | ~64 GB (disk >= 250 GB) |
+
+More patients mainly lengthen steps 3, 4, 5-7 (they scale with patients); step 8 is capped by `--max-hours`
+and steps 9 / 11 by `--limit`. Beyond ~300 patients each extra patient adds only one nodule.
+
 ## Vast.ai checklist
 
 1. **Instance:** RTX 4090 (or A100 40 GB), >= 32 GB RAM, **>= 150 GB disk**, reliability > 99%,
