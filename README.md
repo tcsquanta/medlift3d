@@ -68,8 +68,16 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh
 [`scripts/runpod_run.sh`](scripts/runpod_run.sh) runs steps 02-04 (and deletes the 64 GB of DICOM once the
 cases are built), 05-07, 08 (diffusion training, stops itself after `TRAIN_HOURS`), 14, 09 (150 nodules),
 11 (20 nodules x 2 follow-ups) and 10; one log per step in `logs/`; after every step a copy of models,
-results, outputs and logs in `/workspace/medlift_backup`; at the end `/workspace/medlift_kaggle.zip`
-(both models, splits, results, all outputs, 15 test patients for the demo).
+results, outputs and logs in `/workspace/medlift_backup`; at the end two zips:
+
+| file | contents | size | for |
+|---|---|---|---|
+| `/workspace/medlift_kaggle.zip` | both `best.pt` models, splits, results, all outputs, 15 test patients | ~1-2 GB | Kaggle: step 10 + demo |
+| `/workspace/medlift_full_results.zip` | **everything produced**: all `outputs/` (tables, figures, PASS/FAIL reports), all step logs, `work/results/`, both models incl. `last.pt` + training logs and previews, LIDC selection files, configs | a few GB | keeping: report, appendix, re-analysis |
+
+`WITH_DATA=1` also puts the prepared data (cases, DTS, SIRT, training pairs, ~45 GB) into the full zip;
+only needed to re-run steps 9-14 elsewhere without downloading LIDC again. Make the full archive at any
+time with `python scripts/archive_results.py --out /workspace/medlift_full_results.zip`.
 
 **A3. While it runs**
 
@@ -82,13 +90,14 @@ results, outputs and logs in `/workspace/medlift_backup`; at the end `/workspace
 
 **A4. Download** when the log says `ALL DONE`:
 
-- JupyterLab: file browser -> `/workspace` -> right-click `medlift_kaggle.zip` -> Download, or
+- JupyterLab: file browser -> `/workspace` -> right-click `medlift_kaggle.zip` and
+  `medlift_full_results.zip` -> Download, or
 - Google Drive (one-time `rclone config`, remote `gdrive`, type `drive`, "auto config" = n, then run the
   printed `rclone authorize ...` on your laptop):
   ```bash
   curl https://rclone.org/install.sh | bash
   rclone copy /workspace/medlift_kaggle.zip gdrive:medlift3d -P
-  rclone copy /workspace/medlift_backup gdrive:medlift3d/backup -P     # optional: logs + everything
+  rclone copy /workspace/medlift_full_results.zip gdrive:medlift3d -P
   ```
 
 **A5. Terminate the pod** (a stopped pod still charges for its disk); delete the Global volume once the zip is safe.
@@ -188,7 +197,7 @@ medlift3d/            library
   pipeline.py         end-to-end per-nodule processing (all methods)
   data/               LIDC-IDRI (pylidc + DICOM), LUNA16, cases
   demo.py             demo backend
-scripts/              steps 00-14, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py,
+scripts/              steps 00-14, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py, archive_results.py,
                       kaggle_run.py (steps 2-8 in one Kaggle session), smoke_test.py
 tests/                pytest unit tests
 configs/              default.yaml (real runs), smoke.yaml (CPU smoke test)

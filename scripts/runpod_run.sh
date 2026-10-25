@@ -5,8 +5,11 @@
 #   N_PATIENTS=300 TRAIN_HOURS=6 bash scripts/runpod_run.sh
 #
 # Steps 2-7 (data), 8 (diffusion training), 14 (detector), 9 (all methods), 11 (growth),
-# 10 (tables, 1 min), then scripts/make_kaggle_bundle.py -> /workspace/medlift_kaggle.zip with
-# everything Kaggle needs (models, results, outputs, demo test patients).
+# 10 (tables, 1 min), then
+#   scripts/make_kaggle_bundle.py -> /workspace/medlift_kaggle.zip        (what Kaggle needs: step 10 + demo)
+#   scripts/archive_results.py    -> /workspace/medlift_full_results.zip  (everything produced: all outputs,
+#                                    logs, results, both models incl. last.pt + training logs, configs;
+#                                    WITH_DATA=1 adds the prepared data, ~45 GB)
 # After every step: copy of models / results / outputs / logs to $BACKUP (the persistent volume).
 # Safe to start again after a crash: finished cases and nodules are skipped; RESUME=1 continues
 # step 8 from work/models/diffusion/last.pt.
@@ -18,6 +21,7 @@ LIMIT_09=${LIMIT_09:-150}
 LIMIT_11=${LIMIT_11:-20}
 BACKUP=${BACKUP:-/workspace/medlift_backup}
 BUNDLE=${BUNDLE:-/workspace/medlift_kaggle.zip}
+FULL=${FULL:-/workspace/medlift_full_results.zip}
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 mkdir -p logs
 
@@ -62,4 +66,5 @@ step 10_evaluate scripts/10_evaluate.py              # 1 min; Kaggle can re-run 
 backup
 
 python scripts/make_kaggle_bundle.py --out "$BUNDLE" --n-demo 15 | tee -a logs/bundle.log
-echo "===== $(date '+%F %T')  ALL DONE. Download $BUNDLE (and $BACKUP if you like), then terminate the pod."
+python scripts/archive_results.py --out "$FULL" ${WITH_DATA:+--with-data} | tee -a logs/bundle.log
+echo "===== $(date '+%F %T')  ALL DONE. Download $BUNDLE (for Kaggle) and $FULL (everything), then terminate the pod."

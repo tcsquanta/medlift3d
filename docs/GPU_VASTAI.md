@@ -220,9 +220,10 @@ Copy the results off, then **Terminate**; delete the Global volume once the zip 
 
 `scripts/runpod_run.sh` runs everything that needs the big GPU (steps 2-8, 14, 9, 11, plus step 10)
 with a log per step in `logs/`, a backup of models / results / outputs to `/workspace/medlift_backup`
-after every step, and at the end `scripts/make_kaggle_bundle.py` -> `/workspace/medlift_kaggle.zip`
-(models, splits, results, all outputs, 15 test patients for the demo; ~1-2 GB). Upload that zip as a
-Kaggle dataset to run step 10 and the demo there. The README has the full RunPod + Kaggle commands.
+after every step, and at the end two zips: `/workspace/medlift_kaggle.zip` (models, splits, results, all
+outputs, 15 test patients for the demo; ~1-2 GB; upload it as a Kaggle dataset for step 10 and the demo)
+and `/workspace/medlift_full_results.zip` (everything produced, see D7). The README has the full
+RunPod + Kaggle commands.
 
 ```bash
 N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RESUME=1 after a crash
@@ -237,7 +238,9 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RE
 | `LIMIT_09` | 150 | nodules measured in step 9 | enough for reliable tables and >= 19 calibration nodules; without it ~460 nodules (10+ h) |
 | `LIMIT_11` | 20 | nodules in the growth experiment | 40 follow-up scans: enough for the H4 comparison |
 | `BACKUP` | `/workspace/medlift_backup` | copy after every step | the persistent volume survives a crash |
-| `BUNDLE` | `/workspace/medlift_kaggle.zip` | the zip for Kaggle | |
+| `BUNDLE` | `/workspace/medlift_kaggle.zip` | the zip for Kaggle (step 10 + demo) | |
+| `FULL` | `/workspace/medlift_full_results.zip` | archive of everything produced (`scripts/archive_results.py`) | keep it: all outputs, logs, results, both models incl. `last.pt` |
+| `WITH_DATA` | not set | `WITH_DATA=1` adds the prepared data (~45 GB) to the full archive | only to re-run steps 9-14 elsewhere without re-downloading LIDC |
 | `RESUME` | not set | `RESUME=1` continues training from `last.pt` | restart after a crash |
 | `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | always | PyTorch reuses GPU memory more flexibly | fewer out-of-memory crashes |
 | `set -euo pipefail` | always | stops the script if a step crashes | later steps never run on broken data |
@@ -342,10 +345,19 @@ SIRT settings, prism size, network size.
 
 ## D7. Getting the results out
 
-* The run ends with `/workspace/medlift_kaggle.zip` (~1-2 GB): download it in JupyterLab (right-click ->
-  Download) or copy it to Google Drive with rclone (one-time `rclone config`: remote `gdrive`, type `drive`,
-  "auto config" = n, run the printed `rclone authorize ...` on your laptop), then
-  `rclone copy /workspace/medlift_kaggle.zip gdrive:medlift3d -P`.
+* The run ends with two zips in `/workspace`:
+  * `medlift_kaggle.zip` (~1-2 GB): what Kaggle needs (both `best.pt`, splits, results, all outputs,
+    15 demo test patients);
+  * `medlift_full_results.zip` (a few GB): **everything produced** -- all `outputs/` (tables, figures,
+    PASS/FAIL reports), all step logs, `work/results/`, both models including `last.pt`, training logs and
+    previews, the LIDC selection files and `configs/`. `WITH_DATA=1` adds the prepared data (~45 GB:
+    cases, DTS, SIRT, training pairs); a Google Drive free account holds 15 GB, so only do that with
+    enough space. Make it any time: `python scripts/archive_results.py --out /workspace/medlift_full_results.zip`.
+* Download both in JupyterLab (right-click -> Download) or copy them to Google Drive with rclone (one-time
+  `rclone config`: remote `gdrive`, type `drive`, "auto config" = n, run the printed `rclone authorize ...`
+  on your laptop), then
+  `rclone copy /workspace/medlift_kaggle.zip gdrive:medlift3d -P` and
+  `rclone copy /workspace/medlift_full_results.zip gdrive:medlift3d -P`.
 * Upload the zip as a Kaggle dataset and follow Part B of the README (step 10 + demo).
 * The big data (all cases, ~45 GB) is not needed afterwards. To demo more than the 15 bundled patients,
   run `python scripts/make_kaggle_bundle.py --n-demo 30` before terminating.
@@ -377,8 +389,9 @@ The same as `runpod_run.sh`, one command at a time:
    python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2
    python scripts/10_evaluate.py
    python scripts/make_kaggle_bundle.py --out /workspace/medlift_kaggle.zip --n-demo 15
+   python scripts/archive_results.py --out /workspace/medlift_full_results.zip        # everything produced
    ```
-4. Download the zip, then **terminate** the instance.
+4. Download both zips, then **terminate** the instance.
 
 ## Tips for step 8
 
