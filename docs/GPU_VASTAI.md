@@ -151,7 +151,18 @@ annotation database):
 More patients mainly lengthen steps 3, 4, 5-7 (they scale with patients); step 8 is capped by `--max-hours`
 and steps 9 / 11 by `--limit`. Beyond ~300 patients each extra patient adds only one nodule.
 
-## Vast.ai checklist
+## Rented GPU in one command, the rest on Kaggle
+
+`scripts/runpod_run.sh` runs everything that needs the big GPU (steps 2-8, 14, 9, 11, plus step 10)
+with a log per step in `logs/`, a backup of models / results / outputs to `/workspace/medlift_backup`
+after every step, and at the end `scripts/make_kaggle_bundle.py` -> `/workspace/medlift_kaggle.zip`
+(models, splits, results, all outputs, 15 test patients for the demo; ~1-2 GB). Upload that zip as a
+Kaggle dataset to run step 10 and the demo there.
+
+```bash
+N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RESUME=1 after a crash
+```
+
 
 1. **Instance:** RTX 4090 (or A100 40 GB), >= 32 GB RAM, **>= 150 GB disk**, reliability > 99%,
    download speed > 500 Mbps, **on-demand** (not interruptible). Template: official *PyTorch*
