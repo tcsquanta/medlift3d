@@ -31,6 +31,111 @@ python -m pytest -q                      # 56 unit tests: physics, Gaussians, me
 python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic phantoms (CPU, ~45 min on 4 cores)
 ```
 
+## Full run: rented GPU (RunPod) for the heavy steps, Kaggle for the rest
+
+| where | steps | why |
+|---|---|---|
+| **RunPod** (L40S 48 GB, ~$1.09/h) | 02-08 data + diffusion training, 14 detector, 09 all methods, 11 growth (+ 10) | need a big GPU and the full 583-patient data (~45 GB) |
+| **Kaggle** (free T4) | 10 evaluation tables, 12 demo | need only a 1-2 GB bundle |
+
+Expected time on one L40S: ~16-21 h for 583 patients (estimate scaled from our Kaggle run; details and
+other GPUs in [`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md)).
+
+### Part A - RunPod
+
+Pod settings: **L40S, 1 GPU, On-Demand**, container disk **300 GB** (fast; erased when the pod stops),
+persistent storage: a **Global volume** mounted at `/workspace` (backups only), template **PyTorch 2.8**.
+
+**A1. Setup** (Web Terminal or JupyterLab -> Terminal):
+
+```bash
+apt-get update && apt-get install -y tmux
+tmux new -s ml                         # detach: Ctrl-b d   re-attach: tmux attach -t ml
+cd /root
+git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+cd medlift3d
+pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest
+python scripts/00_check_env.py         # GPU listed?
+python -m pytest -q                    # all tests must pass
+```
+
+**A2. Run everything that needs the GPU** (one command, inside tmux):
+
+```bash
+N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh
+```
+
+[`scripts/runpod_run.sh`](scripts/runpod_run.sh) runs steps 02-04 (and deletes the 64 GB of DICOM once the
+cases are built), 05-07, 08 (diffusion training, stops itself after `TRAIN_HOURS`), 14, 09 (150 nodules),
+11 (20 nodules x 2 follow-ups) and 10; one log per step in `logs/`; after every step a copy of models,
+results, outputs and logs in `/workspace/medlift_backup`; at the end `/workspace/medlift_kaggle.zip`
+(both models, splits, results, all outputs, 15 test patients for the demo).
+
+**A3. While it runs**
+
+- `tail -f logs/08_train.log`: after ~50 steps check `s/step` (L40S at batch 8: roughly 0.6-0.9 s/step,
+  estimated); much slower -> switch pod (billing is per millisecond).
+- `grep -h "passed,.*failed" logs/*.log`: every step must end `ALL PASS`.
+- After a crash: new pod with the same Global volume, copy `/workspace/medlift_backup/work/models` back to
+  `work/models`, then `RESUME=1 N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh`
+  (finished cases / nodules are skipped, training continues from `last.pt`).
+
+**A4. Download** when the log says `ALL DONE`:
+
+- JupyterLab: file browser -> `/workspace` -> right-click `medlift_kaggle.zip` -> Download, or
+- Google Drive (one-time `rclone config`, remote `gdrive`, type `drive`, "auto config" = n, then run the
+  printed `rclone authorize ...` on your laptop):
+  ```bash
+  curl https://rclone.org/install.sh | bash
+  rclone copy /workspace/medlift_kaggle.zip gdrive:medlift3d -P
+  rclone copy /workspace/medlift_backup gdrive:medlift3d/backup -P     # optional: logs + everything
+  ```
+
+**A5. Terminate the pod** (a stopped pod still charges for its disk); delete the Global volume once the zip is safe.
+
+### Part B - Kaggle
+
+**B1.** Kaggle -> Datasets -> New Dataset -> upload `medlift_kaggle.zip` (e.g. name it `medlift-583`).
+
+**B2.** New notebook, **GPU T4**, Internet on, Add Input -> your dataset. Then:
+
+Cell 1 - setup
+```bash
+!git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+%cd medlift3d
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+```
+
+Cell 2 - copy the bundle in (finds it wherever Kaggle put it)
+```bash
+%%bash
+cd /kaggle/working/medlift3d
+S=$(find /kaggle/input -name splits.json -path "*work*" | head -1)
+if [ -z "$S" ]; then                       # Kaggle kept the zip packed
+  Z=$(find /kaggle/input -name "*.zip" | head -1); unzip -q "$Z" -d .
+else
+  B=$(dirname "$(dirname "$S")"); rm -rf work outputs; cp -r "$B/work" work; cp -r "$B/outputs" outputs
+fi
+ls work/models/diffusion work/models/detector; ls work/cases | wc -l
+```
+
+Cell 3 - evaluation tables (step 10, ~1 min)
+```bash
+!python scripts/10_evaluate.py
+!cat outputs/10_evaluation/table_accuracy.md outputs/10_evaluation/table_intervals.md
+!cat outputs/11_growth/table_growth.md outputs/14_detector/table_detection.md
+```
+
+Cell 4 - demo
+```bash
+!python scripts/12_demo_app.py --selftest      # must end ALL PASS
+!python scripts/12_demo_app.py --share         # open the printed gradio.live link
+```
+
+The first line should read `detector: learned detector (step 14) | calibration: yes | cases offered (test): 15`.
+In the demo: pick a test patient -> the detector suggests nodules -> "Reconstruct in 3D" -> tick
+"show radiologists' ground truth" to compare.
+
 ## Real data: run the steps in order
 
 Each script prints **PASS / FAIL** checks and saves figures in `outputs/<step>/`
@@ -42,16 +147,16 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 |---|---|---|
 | 0 | `python scripts/00_check_env.py` | versions, GPU, projector speed |
 | 1 | `python scripts/01_verify_physics.py` | X-ray physics checks (mass measured by every view, missing wedge, ...) |
-| 2 | `python scripts/02_select_lidc.py --n-patients 200` | choose LIDC-IDRI nodules from the radiologist annotations (offline) |
+| 2 | `python scripts/02_select_lidc.py --n-patients 583` | choose LIDC-IDRI nodules from the radiologist annotations (offline) |
 | 3 | `python scripts/03_download_lidc.py --workers 8` | download only those CT series from TCIA (~110 MB each) |
 | 4 | `python scripts/04_prepare_cases.py --source lidc` | CT + 4-radiologist consensus masks, alignment checks, patient split |
 | 5 | `python scripts/05_simulate_dts.py` | 15-view low-dose DTS per CT |
 | 6 | `python scripts/06_reconstruct_sirt.py` | standard DTS reconstruction + candidate nodules |
 | 7 | `python scripts/07_build_roi_dataset.py` | (DTS column, CT column) training pairs |
-| 8 | `python scripts/08_train_diffusion.py --batch-size 8` | **train the diffusion prior (rented GPU, ~3-4 h on RTX 4090)** |
-| 9 | `python scripts/09_run_pipeline.py --members 8` | all methods on held-out nodules |
+| 8 | `python scripts/08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours 6` | **train the diffusion prior (rented GPU; stops at the time cap, saves best.pt)** |
+| 9 | `python scripts/09_run_pipeline.py --members 8 --limit 150` | all methods on held-out nodules |
 | 10 | `python scripts/10_evaluate.py` | accuracy tables, calibrated intervals, H1-H3 |
-| 11 | `python scripts/11_growth_experiment.py` | virtual follow-up scans: VDT vs MDT, H4 |
+| 11 | `python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2` | virtual follow-up scans: VDT vs MDT, H4 |
 | 12 | `python scripts/12_demo_app.py --share` | interactive click-to-3D demo (Gradio) |
 | 14 | `python scripts/14_train_detector.py` | train the nodule detector on the DTS volume (train patients), FROC on test patients; the demo suggests its detections |
 | 13 | `python scripts/13_geometry_sensitivity.py --limit 12` | same nodules with 60 views / a 40 deg sweep: how much the 15-view, 30 deg choice matters |
@@ -60,8 +165,9 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 
 LIDC-IDRI has up to four radiologists' 3D outlines and ratings for every nodule. The
 "Radiologist Annotations" download on the TCIA page is the database bundled with `pylidc`, so
-masks come for free. Only the CT images need downloading, and step 2 picks the ~200 most useful
-patients (~22 GB instead of 133 GB). LUNA16 (same scans as `.mhd`) works too: `--source luna16`.
+masks come for free. Only the CT images need downloading: 583 of the 1,010 patients have a qualifying
+nodule (1,144 nodules, ~64 GB); step 2 takes the most nodule-rich patients first (200 patients already hold
+60% of the nodules). LUNA16 (same scans as `.mhd`) works too: `--source luna16`.
 
 ## Repository layout
 
@@ -82,10 +188,12 @@ medlift3d/            library
   pipeline.py         end-to-end per-nodule processing (all methods)
   data/               LIDC-IDRI (pylidc + DICOM), LUNA16, cases
   demo.py             demo backend
-scripts/              steps 00-12 + smoke_test.py
+scripts/              steps 00-14, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py,
+                      kaggle_run.py (steps 2-8 in one Kaggle session), smoke_test.py
 tests/                pytest unit tests
 configs/              default.yaml (real runs), smoke.yaml (CPU smoke test)
-docs/                 PROPOSAL, VERIFY, GPU_VASTAI
+docs/                 PROPOSAL (method), VERIFY (what each check means), GPU_VASTAI (GPUs, times, costs),
+                      MedLift3D_Project_Guide.docx (the whole project in plain English)
 ```
 
 ## Limitations
