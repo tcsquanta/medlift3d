@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Step 12 - interactive click-to-3D demo (Gradio).
 
-1. pick a case (or a synthetic phantom), scroll the DTS depth slider;
+1. pick a case (or a synthetic phantom), scroll the DTS depth slider; cases are labelled with their
+   patient split -- use *test* patients (never seen in training) for an honest demonstration;
    yellow circles are the detector's candidate nodules near that depth,
    green circles the radiologists' annotated nodules (LIDC ground truth)
 2. click on a nodule in the coronal DTS slice
@@ -51,6 +52,13 @@ def build_ui(sess: DemoSession):
                                           xref="paper", yref="paper", font=dict(size=11))])
         return f
 
+    def split_note(name):
+        sp = "phantom" if name.startswith("phantom:") else sess.case_split(name)
+        return {"test": " (test patient: never seen in training)",
+                "cal": " (calibration patient: not used for training)",
+                "train": " (**training patient**: the model has seen this patient; pick a test case for an honest demo)",
+                "phantom": " (synthetic phantom)"}.get(sp, "")
+
     def on_case(name):
         if name.startswith("phantom:"):                     # on-the-fly synthetic chest (saved cases load from disk)
             sess.load_phantom(seed=int(name.split(":")[-1]))
@@ -67,8 +75,8 @@ def build_ui(sess: DemoSession):
         anns = [[a["index"] + 1, *[round(v, 1) for v in a["xyz"]], round(a["diameter_mm"], 1), a["iy"]] for a in ann]
         return (gr.Slider(minimum=0, maximum=sess.n_depth - 1, value=iy, step=1, label="DTS depth slice (y)"),
                 sess.coronal_image(iy), cands, anns,
-                f"Loaded {name}: {len(sess.candidates)} detector candidates (yellow), {len(ann)} radiologist-annotated "
-                "nodules (green). Click a nodule.")
+                f"Loaded {name}{split_note(name)}: {len(sess.candidates)} detector candidates (yellow), {len(ann)} "
+                "radiologist-annotated nodules (green). Click a nodule.")
 
     def on_slider(iy):
         state["iy"] = int(iy)
@@ -113,12 +121,14 @@ def build_ui(sess: DemoSession):
                 f"- volume doubling time (VDT): {days(g['vdt_days'])} -> {g['vdt_category']}\n"
                 f"- mass doubling time (MDT): {days(g['mdt_days'])} -> {g['mdt_category']}")
 
-    choices = sess.available_cases() + ["phantom:0", "phantom:1"]
+    label = {"test": "test, unseen", "cal": "calibration", "train": "training patient"}
+    choices = [(f"{c}  ({label.get(sess.case_split(c), 'split unknown')})", c) for c in sess.available_cases()]
+    choices += [("phantom:0  (synthetic)", "phantom:0"), ("phantom:1  (synthetic)", "phantom:1")]
     with gr.Blocks(title="MedLift-3D") as demo:
         gr.Markdown("# MedLift-3D: click-to-3D lung nodule mass & growth from low-dose DTS")
         with gr.Row():
             with gr.Column(scale=1):
-                case = gr.Dropdown(choices, label="case", value=None)
+                case = gr.Dropdown(choices, label="case (test patients first: the model never saw them)", value=None)
                 status = gr.Markdown()
                 depth = gr.Slider(0, 100, step=1, label="DTS depth slice (y)")
                 img = gr.Image(label="coronal DTS slice (click a nodule)", interactive=False)
@@ -156,7 +166,7 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
         ck.check("cases available", False, "run steps 4-6 first")
         return ck.finish(out_dir)
     sess.load_case(cases[0])
-    ck.check("case loads, candidates computed", sess.ctx is not None, f"{cases[0]}: {len(sess.candidates)} candidates")
+    ck.check("case loads, candidates computed", sess.ctx is not None, f"{cases[0]} ({sess.case_split(cases[0])} split): {len(sess.candidates)} candidates")
     img = sess.coronal_image(sess.n_depth // 2)
     ck.check("coronal slice image", img.ndim == 3 and img.shape[2] == 3, str(img.shape))
     nod = max(sess.case.nodules, key=lambda n: n.diameter_mm)          # the clearest nodule of the case

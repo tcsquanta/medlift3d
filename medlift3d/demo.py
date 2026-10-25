@@ -59,8 +59,19 @@ class DemoSession:
         self.last: Optional[Dict] = None
 
     # ------------------------------------------------------------------ cases
+    SPLIT_ORDER = {"test": 0, "cal": 1, "train": 2}
+
+    def case_split(self, case_id: str) -> str:
+        """'train' / 'cal' / 'test' from work/splits.json ('?' if unknown)."""
+        if not hasattr(self, "_splits"):
+            p = self.paths.p("splits.json")
+            self._splits = json.load(open(p)).get("cases", {}) if os.path.exists(p) else {}
+        return self._splits.get(case_id, "?")
+
     def available_cases(self) -> List[str]:
-        return [c for c in self.paths.case_ids() if os.path.exists(self.paths.sirt(c))]
+        """Cases with a DTS reconstruction, held-out (test, then calibration) patients first."""
+        ids = [c for c in self.paths.case_ids() if os.path.exists(self.paths.sirt(c))]
+        return sorted(ids, key=lambda c: (self.SPLIT_ORDER.get(self.case_split(c), 3), c))
 
     def load_case(self, case_id: str) -> None:
         case = load_case(self.paths.case(case_id), load_readers=False)
