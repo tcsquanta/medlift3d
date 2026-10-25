@@ -241,6 +241,7 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RE
 | `BUNDLE` | `/workspace/medlift_kaggle.zip` | the zip for Kaggle (step 10 + demo) | |
 | `FULL` | `/workspace/medlift_full_results.zip` | archive of everything produced (`scripts/archive_results.py`) | keep it: all outputs, logs, results, both models incl. `last.pt` |
 | `WITH_DATA` | not set | `WITH_DATA=1` adds the prepared data (~45 GB) to the full archive | only to re-run steps 9-14 elsewhere without re-downloading LIDC |
+| `KEEP_DICOM` | not set | `KEEP_DICOM=1` keeps the downloaded LIDC DICOM (~64 GB) instead of deleting it after step 4 | to save the raw CT to Google Drive (never download from TCIA again) |
 | `RESUME` | not set | `RESUME=1` continues training from `last.pt` | restart after a crash |
 | `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | always | PyTorch reuses GPU memory more flexibly | fewer out-of-memory crashes |
 | `set -euo pipefail` | always | stops the script if a step crashes | later steps never run on broken data |
@@ -361,6 +362,95 @@ SIRT settings, prism size, network size.
 * Upload the zip as a Kaggle dataset and follow Part B of the README (step 10 + demo).
 * The big data (all cases, ~45 GB) is not needed afterwards. To demo more than the 15 bundled patients,
   run `python scripts/make_kaggle_bundle.py --n-demo 30` before terminating.
+
+## Saving everything to Google Drive (including the prepared data and the raw CT)
+
+With a large Google Drive (e.g. 5 TB) keep **everything**: results, models, the prepared data (~45 GB) and
+even the downloaded LIDC CT (~64 GB). Then you never have to download from TCIA or re-run steps 2-7
+again: a later run (more training, a changed evaluation) can start directly at step 8, 9 or 14.
+
+| what | size (583 patients, estimate) | gives you |
+|---|---|---|
+| full results (`archive_results.py`) | a few GB | all outputs, logs, results, both models incl. `last.pt` |
+| + prepared data (`--with-data`) | ~45 GB more | cases, DTS, SIRT volumes, training pairs: restart at step 8 / 9 / 14 |
+| + raw LIDC DICOM (`KEEP_DICOM=1`) | ~64 GB more | the CT scans themselves: re-run step 4 onwards with other settings |
+
+Write the big files to the **container disk** (`/root/...`), not to the `/workspace` volume: the container
+disk is fast and free, the Global volume charges per GB and per disk operation. Disk check: data ~45 GB +
+DICOM ~64 GB + their archives ~110 GB = ~220 GB, so 300 GB is enough if the DICOM folder is deleted after
+it is archived (below); otherwise take a 400 GB container disk.
+
+**1. rclone, once per pod** (Google login runs in your laptop's browser):
+
+```bash
+curl https://rclone.org/install.sh | bash
+rclone config
+#   n                     new remote
+#   name> gdrive
+#   Storage> drive        (Google Drive)
+#   client_id / client_secret: press Enter (empty)
+#   scope> 1              (full access)
+#   service_account_file: Enter;  Edit advanced config? n
+#   Use auto config? n    -> it prints:  rclone authorize "drive" "..."
+#   on your laptop: install rclone (rclone.org/downloads), run that exact command, log in to Google,
+#   copy the token it prints back into the pod
+#   Configure as Shared Drive? n;  then y (keep) and q (quit)
+rclone lsd gdrive:            # should list your Drive folders
+```
+
+**2. Start the run so nothing is deleted and the full archive includes the data:**
+
+```bash
+mkdir -p /root/to_drive
+KEEP_DICOM=1 WITH_DATA=1 FULL=/root/to_drive/medlift_everything.zip \
+  N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh
+```
+
+(Already running without these options? Then the DICOM is gone, but you can still archive the data at
+the end: `python scripts/archive_results.py --out /root/to_drive/medlift_everything.zip --with-data`.)
+
+**3. When the run says `ALL DONE`, archive the raw CT and upload everything:**
+
+```bash
+cd /root/medlift3d
+tar cf /root/to_drive/lidc_dicom.tar data/LIDC-IDRI && rm -rf data/LIDC-IDRI   # one big file uploads much faster than ~120k DICOM files
+cp /workspace/medlift_kaggle.zip /root/to_drive/                               # the Kaggle bundle too
+ls -lh /root/to_drive
+rclone copy /root/to_drive gdrive:medlift3d -P --transfers 4 --drive-chunk-size 256M
+rclone check /root/to_drive gdrive:medlift3d --one-way                         # verifies every file (checksums)
+```
+
+`rclone check` must report `0 differences found` before you terminate the pod. Upload time depends on the
+pod's network and on Google: roughly 30 min to 2 h for ~160 GB (estimate). Google allows 750 GB of
+uploads per day per account, far above this.
+
+In Drive you then have `medlift3d/`: `medlift_kaggle.zip` (Kaggle: step 10 + demo),
+`medlift_everything.zip` (results, logs, models, prepared data) and `lidc_dicom.tar` (raw CT).
+
+**4. Restoring on a new machine later** (another rented GPU):
+
+```bash
+git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git && cd medlift3d
+pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest
+# rclone config as in 1., then:
+rclone copy gdrive:medlift3d/medlift_everything.zip . -P
+unzip -q medlift_everything.zip && rm medlift_everything.zip      # work/, outputs/, logs/ are back
+# optional, only to redo step 4 onwards with other settings:
+rclone copy gdrive:medlift3d/lidc_dicom.tar . -P && tar xf lidc_dicom.tar && rm lidc_dicom.tar
+```
+
+The restored `work/.cases_done` makes `runpod_run.sh` skip steps 2-4. To re-run only some steps, call
+them directly, e.g. more training then a new evaluation:
+
+```bash
+python scripts/08_train_diffusion.py --batch-size 8 --steps 60000 --max-hours 4 --resume
+rm -f work/results/pipeline.jsonl work/results/growth.jsonl        # otherwise steps 9 / 11 keep the old results
+python scripts/09_run_pipeline.py --members 8 --limit 150
+python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2
+python scripts/10_evaluate.py
+```
+
+The 45 GB data is too large for Kaggle's 20 GB working disk; use `medlift_kaggle.zip` there.
 
 ## Manual step-by-step (any rented GPU)
 

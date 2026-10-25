@@ -32,6 +32,8 @@ def main():
     if args.with_data:
         trees += [f"{w}/cases", f"{w}/dts", f"{w}/sirt", f"{w}/roi_pairs"]
     files = [f for f in glob.glob(f"{w}/*") if os.path.isfile(f)]            # splits.json, selection csv, ...
+    if args.with_data and os.path.exists(f"{w}/.cases_done"):                # restored data: runpod_run.sh skips steps 2-4
+        files.append(f"{w}/.cases_done")
     for t in trees:
         files += [f for f in glob.glob(f"{t}/**/*", recursive=True) if os.path.isfile(f)]
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)

@@ -10,6 +10,8 @@
 #   scripts/archive_results.py    -> /workspace/medlift_full_results.zip  (everything produced: all outputs,
 #                                    logs, results, both models incl. last.pt + training logs, configs;
 #                                    WITH_DATA=1 adds the prepared data, ~45 GB)
+# KEEP_DICOM=1 keeps the downloaded LIDC DICOM (~64 GB) instead of deleting it after step 4
+# (to save it to Google Drive; see docs/GPU_VASTAI.md, "Saving everything to Google Drive").
 # After every step: copy of models / results / outputs / logs to $BACKUP (the persistent volume).
 # Safe to start again after a crash: finished cases and nodules are skipped; RESUME=1 continues
 # step 8 from work/models/diffusion/last.pt.
@@ -43,8 +45,12 @@ if [ ! -f work/.cases_done ]; then
   step 02_select   scripts/02_select_lidc.py --n-patients "$N_PATIENTS"
   step 03_download scripts/03_download_lidc.py --workers 8
   step 04_cases    scripts/04_prepare_cases.py --source lidc
-  rm -rf data/LIDC-IDRI && touch work/.cases_done
-  echo "deleted data/LIDC-IDRI (cases built)"
+  if [ -z "${KEEP_DICOM:-}" ]; then
+    rm -rf data/LIDC-IDRI && echo "deleted data/LIDC-IDRI (cases built)"
+  else
+    echo "KEEP_DICOM=1: data/LIDC-IDRI kept"
+  fi
+  touch work/.cases_done
 fi
 step 05_dts   scripts/05_simulate_dts.py
 step 06_sirt  scripts/06_reconstruct_sirt.py
