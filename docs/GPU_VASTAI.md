@@ -11,7 +11,7 @@
 | 5 | DTS simulation | 3.6 min | 5-10 min |
 | 6 | coarse SIRT + candidates | 9 min | 15-20 min |
 | 7 | diffusion training pairs | 24 min | 40-60 min |
-| **8** | **diffusion training** | **0.96 s/step at batch 2 x 2 GPUs: 28,186 steps in 8.3 h** | **~0.6-0.9 s/step at batch 8: 30k steps 5-7.5 h, 40k steps 6.5-10 h** |
+| **8** | **diffusion training** | **0.96 s/step at batch 2 x 2 GPUs: 28,186 steps in 8.3 h** | **~9-14 samples/s (batch 2-4 fits in 24 GB): 6 h cap = ~190-290k samples** |
 | 14 | nodule detector | 22.5 min (one T4) | 10-15 min |
 | **9** | **all methods, K = 8, `--limit 150` nodules** | demo click with K = 4: 110-230 s | **3-5 h** (K = 4: about half) |
 | 10 | evaluation tables | ~1 min | ~1 min |
@@ -21,7 +21,7 @@
 | | **total** | | **~14-19 h, about $5-10 at $0.35-0.50/h** |
 
 The RTX 4090 column scales our Kaggle measurements: a 4090 is assumed to train this 3D U-Net ~4-6x
-faster than one T4 (bf16, batch 8), and steps 4 and 7 grow with the number of patients (5x). Step 8
+faster than one T4 (bf16; step 8 picks the largest batch that fits, 2-4 on 24 GB), and steps 4 and 7 grow with the number of patients (5x). Step 8
 prints its `s/step` after 50 steps: check it and set `--max-hours` to fit your budget. An H100 / A100
 (80 GB) is ~1.5-3x faster than a 4090 (total ~8-11 h, but ~$1-2.5/h).
 
@@ -116,6 +116,24 @@ session (copy `work` from the input), then:
 It re-simulates each patient 4 times (15, 60, 15 and 74 views; the log prints the simulation + SIRT
 time per case) and keeps the results in `work/results/geometry.jsonl`, so a stopped run continues
 where it left off.
+
+## Which GPU?
+
+Memory decides the batch size: one 64 x 128 x 64 training sample needs ~5 GB (a 16 GB T4 fitted batch 2,
+batch 4 ran out of memory); step 8 halves the batch automatically until it fits. Speed-ups are relative to
+an RTX 4090 for this 3D U-Net (estimates from public benchmarks; measure with step 8's `s/step`). Prices are
+typical Vast.ai on-demand prices and change daily.
+
+| GPU (memory) | batch that fits | speed vs 4090 | ~$/h | 583 patients: total (estimate) |
+|---|---|---|---|---|
+| RTX 4090 (24 GB) | 2-4 | 1x | 0.30-0.50 | ~18-24 h, ~$7-12 |
+| L40S / RTX 6000 Ada (48 GB) | 8 | ~1.1-1.3x | 0.60-0.90 | ~16-21 h |
+| **A100 80 GB (SXM)** | 8-16 | ~1.5-2x | 0.80-1.50 | **~13-17 h, ~$12-25** |
+| H100 80 GB (SXM) | 8-16 | ~2-3x | 1.80-2.80 | ~10-13 h, ~$20-35 |
+
+About 4-6 h of a full run does not depend on the GPU at all: downloading 64 GB and step 4 (DICOM -> cases)
+run on the CPU and network. A multi-GPU instance only speeds up step 8 (`torchrun --standalone
+--nproc_per_node N scripts/08_train_diffusion.py ...`); steps 5-7, 9 and 11 use one GPU, so the others sit idle.
 
 ## How many patients?
 
