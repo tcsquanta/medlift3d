@@ -235,7 +235,7 @@ and `/workspace/medlift_full_results.zip` (everything produced, see D7). The REA
 RunPod + Kaggle commands.
 
 ```bash
-N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RESUME=1 after a crash
+N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; after a crash: the same command again
 ```
 
 ### Settings at the top of the script
@@ -251,7 +251,8 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; RE
 | `FULL` | `/workspace/medlift_full_results.zip` | archive of everything produced (`scripts/archive_results.py`) | keep it: all outputs, logs, results, both models incl. `last.pt` |
 | `WITH_DATA` | not set | `WITH_DATA=1` adds the prepared data (~45 GB) to the full archive | only to re-run steps 9-14 elsewhere without re-downloading LIDC |
 | `KEEP_DICOM` | not set | `KEEP_DICOM=1` keeps the downloaded LIDC DICOM (~64 GB) instead of deleting it after step 4 | to save the raw CT to Google Drive (never download from TCIA again) |
-| `RESUME` | not set | `RESUME=1` continues training from `last.pt` | restart after a crash |
+| `MORE_TRAIN_HOURS` | not set | `MORE_TRAIN_HOURS=3` continues a **finished** training from `last.pt` for 3 more hours, then re-runs steps 9, 11, 10 and the zips (old step 9 / 11 results move to `work/results/old/`) | the validation PSNR was still rising at the cap |
+| (re-running) | - | finished steps are skipped (marker files `.done`); an interrupted training continues from `last.pt` automatically (`RESUME=1` is no longer needed) | crash recovery |
 | `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | always | PyTorch reuses GPU memory more flexibly | fewer out-of-memory crashes |
 | `set -euo pipefail` | always | stops the script if a step crashes | later steps never run on broken data |
 
@@ -272,14 +273,14 @@ Change any of them in front of the command, e.g. `N_PATIENTS=300 TRAIN_HOURS=8 b
 
 ### Step 08: diffusion training (the expensive one)
 
-`08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours 6 [--resume]`
+`08_train_diffusion.py --batch-size 8 --steps 1000000 --max-hours 6 [--resume]`
 
 | option | value | meaning and reason |
 |---|---|---|
 | `--batch-size 8` | 8 samples per step | the recipe's batch; ~5 GB per sample fits in 48 GB; halved automatically (8 -> 4 -> 2) if it does not fit |
-| `--steps 40000` | target length | the full recipe; in practice the time cap usually stops training first |
+| `--steps 1000000` | upper bound only | the **time cap decides** when training stops (the recipe's 40k steps would also block continuing later) |
 | `--max-hours 6` | time cap | final validation, save `best.pt` / `last.pt`, stop; the learning rate is constant, so stopping early cuts nothing short |
-| `--resume` | if `RESUME=1` | continue from `last.pt` (model, averaged model, optimiser, step count) |
+| `--resume` | automatic | continue from `last.pt` (model, averaged model, optimiser, step count, best score so far): used after an interruption and with `MORE_TRAIN_HOURS` |
 | `--amp` (default `auto`) | bf16 on L40S / A100 | half-precision maths: ~2x faster, half the memory |
 | learning rate (config) | 2e-4 | warm-up over the first 500 steps, then constant |
 | EMA (config) | 0.999 | a smoothed average of the weights; the averaged model is used for sampling (more stable) |
@@ -290,9 +291,33 @@ Model (config): 3D U-Net, 17.4 M parameters, v-prediction, cosine schedule, 1,00
 Expected on an L40S (estimate): ~0.6-0.9 s/step -> ~24-36k steps in 6 h (~190-290k samples); with
 ~2,800 training pairs the model sees each about 70-100 times.
 
-**Deciding D4 (training hours):** watch the `[val] ... nodule box: sample X dB | condition Y dB` lines.
-Still rising clearly at the cap and time / budget left -> `--resume` for a few more hours (or start with
-`TRAIN_HOURS=8`). Flat for the last few checks -> more hours will not help much.
+**Deciding D4 (training hours):** watch the `[val] ... nodule box: sample X dB | condition Y dB` lines
+(every 2,000 steps). Flat for the last few checks -> more hours will not help much. Still rising clearly at
+the cap and time / budget left -> continue training (below), or start with `TRAIN_HOURS=8`.
+
+### Continuing training after the time cap
+
+Yes, training can always be continued: every check saves `last.pt` (model, averaged model, optimiser,
+step count and the best score so far), and a continued run picks up exactly there.
+
+* **After the whole run finished:**
+  ```bash
+  MORE_TRAIN_HOURS=3 bash scripts/runpod_run.sh
+  ```
+  Training continues from `last.pt` for 3 more hours. `best.pt` is only replaced if a later check beats the
+  best score so far (the score is stored in the checkpoints, so continuing never "forgets" a better
+  earlier model). Because the model changed, the old step 9 / 11 results move to `work/results/old/` and
+  steps 9, 11, 10 and both zips run again with the new model (the detector, step 14, is unchanged).
+  Cost: the extra hours + ~5-8 h for steps 9 / 11 again on an L40S (estimate).
+* **Better: decide while step 8 is still running.** If the PSNR is still rising near the end of the 6 h,
+  continuing *before* steps 9 / 11 avoids running them twice: stop the script (`Ctrl-c` in tmux) right
+  after step 8 has saved (the log says `time budget ... reached`, then `----- backup`), then
+  `MORE_TRAIN_HOURS=3 bash scripts/runpod_run.sh`.
+* **Directly, without the script:**
+  `python scripts/08_train_diffusion.py --batch-size 8 --steps 1000000 --max-hours 3 --resume`.
+* **After an interruption** (crash, `Ctrl-c` during training): just run the same command again; training
+  continues from the last check (at most 2,000 steps are lost) for `TRAIN_HOURS` more hours -- set
+  `TRAIN_HOURS` to the hours you still want.
 
 ### Step 14: detector training (settings in `configs/default.yaml` -> `detector`)
 
@@ -452,11 +477,7 @@ The restored `work/.cases_done` makes `runpod_run.sh` skip steps 2-4. To re-run 
 them directly, e.g. more training then a new evaluation:
 
 ```bash
-python scripts/08_train_diffusion.py --batch-size 8 --steps 60000 --max-hours 4 --resume
-rm -f work/results/pipeline.jsonl work/results/growth.jsonl        # otherwise steps 9 / 11 keep the old results
-python scripts/09_run_pipeline.py --members 8 --limit 150
-python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2
-python scripts/10_evaluate.py
+MORE_TRAIN_HOURS=4 bash scripts/runpod_run.sh     # 4 h more training, then steps 9, 11, 10 + zips with the new model
 ```
 
 The 45 GB data is too large for Kaggle's 20 GB working disk; use `medlift_kaggle.zip` there.
@@ -651,7 +672,7 @@ The same as `runpod_run.sh`, one command at a time:
    python scripts/05_simulate_dts.py
    python scripts/06_reconstruct_sirt.py
    python scripts/07_build_roi_dataset.py --jitter 3 --negatives 2
-   python scripts/08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours 6
+   python scripts/08_train_diffusion.py --batch-size 8 --steps 1000000 --max-hours 6     # later: same + --resume to continue
    python scripts/14_train_detector.py
    python scripts/09_run_pipeline.py --members 8 --limit 150
    python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2

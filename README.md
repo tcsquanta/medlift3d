@@ -86,9 +86,14 @@ time with `python scripts/archive_results.py --out /workspace/medlift_full_resul
 - `tail -f logs/08_train.log`: after ~50 steps check `s/step` (L40S at batch 8: roughly 0.6-0.9 s/step,
   estimated); much slower -> switch pod (billing is per millisecond).
 - `grep -h "passed,.*failed" logs/*.log`: every step must end `ALL PASS`.
-- After a crash: new pod with the same Global volume, copy `/workspace/medlift_backup/work/models` back to
-  `work/models`, then `RESUME=1 N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh`
-  (finished cases / nodules are skipped, training continues from `last.pt`).
+- The script stopped (crash, `Ctrl-c`) but the pod still runs: run the same command again. Finished steps
+  are skipped, an interrupted training continues from `last.pt`, finished nodules are kept.
+- The pod itself was lost: new pod with the same Global volume, restore with
+  `mkdir -p work && cp -r /workspace/medlift_backup/work/. work/`, then the same command (the data steps
+  02-07 run again, training / detector / measured nodules are taken from the backup).
+- Validation PSNR still rising at the 6 h cap: `MORE_TRAIN_HOURS=3 bash scripts/runpod_run.sh` continues
+  training for 3 h and re-runs steps 9, 11, 10 with the new model (details: `docs/GPU_VASTAI.md`,
+  "Continuing training after the time cap").
 
 **A4. Download** when the log says `ALL DONE`:
 
@@ -164,7 +169,7 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 5 | `python scripts/05_simulate_dts.py` | 15-view low-dose DTS per CT |
 | 6 | `python scripts/06_reconstruct_sirt.py` | standard DTS reconstruction + candidate nodules |
 | 7 | `python scripts/07_build_roi_dataset.py` | (DTS column, CT column) training pairs |
-| 8 | `python scripts/08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours 6` | **train the diffusion prior (rented GPU; stops at the time cap, saves best.pt)** |
+| 8 | `python scripts/08_train_diffusion.py --batch-size 8 --steps 1000000 --max-hours 6` (add `--resume` to continue) | **train the diffusion prior (rented GPU; stops at the time cap, saves best.pt)** |
 | 9 | `python scripts/09_run_pipeline.py --members 8 --limit 150` | all methods on held-out nodules |
 | 10 | `python scripts/10_evaluate.py` | accuracy tables, calibrated intervals, H1-H3 |
 | 11 | `python scripts/11_growth_experiment.py --limit 20 --pairs-per-nodule 2` | virtual follow-up scans: VDT vs MDT, H4 |

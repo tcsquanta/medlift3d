@@ -179,6 +179,7 @@ def main():
     ema = EMA(model, float(dcfg["ema_decay"]) if not args.tiny else 0.99)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.0)
     start = 0
+    resumed_best = None
     last_path = os.path.join(mdir, "last.pt")
     if args.resume and os.path.exists(last_path):
         st = torch.load(last_path, map_location=dev, weights_only=False)
@@ -187,7 +188,11 @@ def main():
         opt.load_state_dict(st["opt"])
         start = int(st["step"])
         ema.n_updates = start
-        print(f"resumed from step {start}")
+        resumed_best = (st.get("extra") or {}).get("best_score")
+        print(f"resumed from step {start}" + ("" if resumed_best is None else
+              f"; best.pt so far: nodule-box gain {resumed_best:+.2f} dB (kept unless a later check beats it)"))
+        if resumed_best is None and os.path.exists(os.path.join(mdir, "best.pt")):
+            print("  note: older checkpoint without a stored best score -- the first check after resuming replaces best.pt")
     ck.info("parameters", f"{count_parameters(model) / 1e6:.2f} M")
     ck.info("training pairs", len(train_ds))
     use_cuda = dev.type == "cuda"
@@ -240,7 +245,7 @@ def main():
     losses, hist_s, hist_c, hist_bs, hist_bc = [], [], [], [], []
     vsp = np.asarray(cfg["roi"]["voxel_mm"], float)[::-1]                              # (z, y, x)
     box_half = None if args.tiny else (np.asarray(cfg["roi"].get("box_mm", (40, 50, 40)), float)[::-1] / vsp / 2.0)
-    best = -1e9
+    best = resumed_best if resumed_best is not None else -1e9      # resuming must not forget the best model so far
     t_start = t_last = time.perf_counter()
     model.train()
     for step in range(start + 1, steps + 1):
@@ -297,11 +302,13 @@ def main():
             viz.save_roi_panel(os.path.join(out, f"val_step{step:06d}.png"),
                                {"condition": c_hu, "diffusion sample": s_hu, "CT": t_hu}, vg, vg.center,
                                title=f"step {step}: PSNR sample {ps:.1f} dB / condition {pc:.1f} dB")
-            save_checkpoint(last_path, model, ema, opt, step, dcfg)
             score = bxs - bxc if np.isfinite(bxs) else ps - pc        # gain over the condition, where it matters
-            if score > best:
-                best = score
-                save_checkpoint(os.path.join(mdir, "best.pt"), model, ema, opt, step, dcfg)
+            improved = score > best
+            best = max(best, score)
+            save_checkpoint(last_path, model, ema, opt, step, dcfg, extra={"best_score": best})
+            if improved:
+                save_checkpoint(os.path.join(mdir, "best.pt"), model, ema, opt, step, dcfg,
+                                extra={"score": score, "best_score": best})
         if out_of_time:
             break
     logf.close()

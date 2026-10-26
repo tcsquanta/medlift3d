@@ -13,8 +13,13 @@
 # KEEP_DICOM=1 keeps the downloaded LIDC DICOM (~64 GB) instead of deleting it after step 4
 # (to save it to Google Drive; see docs/GPU_VASTAI.md, "Saving everything to Google Drive").
 # After every step: copy of models / results / outputs / logs to $BACKUP (the persistent volume).
-# Safe to start again after a crash: finished cases and nodules are skipped; RESUME=1 continues
-# step 8 from work/models/diffusion/last.pt.
+#
+# Safe to start again (after a crash, or to change something): finished cases, training pairs,
+# training, detector and measured nodules are skipped (marker files .done); an interrupted training
+# continues from work/models/diffusion/last.pt automatically (for TRAIN_HOURS more hours).
+# Train longer after a finished run:  MORE_TRAIN_HOURS=3 bash scripts/runpod_run.sh
+#   -> continues from last.pt for 3 h (best.pt is kept unless beaten), moves the old step 9 / 11
+#      results to work/results/old/ (they belong to the old model) and re-runs 9, 11, 10 and the zips.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 N_PATIENTS=${N_PATIENTS:-583}
@@ -52,17 +57,40 @@ if [ ! -f work/.cases_done ]; then
   fi
   touch work/.cases_done
 fi
-step 05_dts   scripts/05_simulate_dts.py
-step 06_sirt  scripts/06_reconstruct_sirt.py
-step 07_pairs scripts/07_build_roi_dataset.py --jitter 3 --negatives 2
+step 05_dts   scripts/05_simulate_dts.py                 # skips finished cases
+step 06_sirt  scripts/06_reconstruct_sirt.py             # skips finished cases
+if [ ! -f work/roi_pairs/.done ]; then
+  step 07_pairs scripts/07_build_roi_dataset.py --jitter 3 --negatives 2
+  touch work/roi_pairs/.done
+fi
 backup
 
-# ---- the expensive part: diffusion training (stops itself after TRAIN_HOURS, saves best.pt / last.pt)
-step 08_train scripts/08_train_diffusion.py --batch-size 8 --steps 40000 --max-hours "$TRAIN_HOURS" ${RESUME:+--resume}
+# ---- the expensive part: diffusion training (stops itself after the time cap, saves best.pt / last.pt).
+# --steps is only an upper bound: the time cap decides (the learning rate is constant after warm-up).
+DIFF=work/models/diffusion
+TRAIN=(scripts/08_train_diffusion.py --batch-size 8 --steps 1000000)
+if [ -n "${MORE_TRAIN_HOURS:-}" ]; then
+  [ -f "$DIFF/last.pt" ] || { echo "MORE_TRAIN_HOURS: no $DIFF/last.pt to continue from"; exit 1; }
+  step 08_train "${TRAIN[@]}" --max-hours "$MORE_TRAIN_HOURS" --resume
+  mkdir -p work/results/old                             # step 9 / 11 results belong to the old model
+  for f in pipeline.jsonl growth.jsonl; do
+    [ -f "work/results/$f" ] && mv "work/results/$f" "work/results/old/${f%.jsonl}_$(date +%Y%m%d_%H%M).jsonl"
+  done
+  touch "$DIFF/.done"
+elif [ ! -f "$DIFF/.done" ]; then
+  RES=""; { [ -f "$DIFF/last.pt" ] || [ -n "${RESUME:-}" ]; } && RES="--resume"   # interrupted earlier: continue
+  step 08_train "${TRAIN[@]}" --max-hours "$TRAIN_HOURS" $RES
+  touch "$DIFF/.done"
+else
+  echo "step 08: training already finished ($DIFF/.done); MORE_TRAIN_HOURS=N continues it"
+fi
 backup
 
 # ---- detector (train patients), all methods on held-out nodules, growth experiment
-step 14_detector scripts/14_train_detector.py
+if [ ! -f work/models/detector/.done ]; then
+  step 14_detector scripts/14_train_detector.py
+  touch work/models/detector/.done
+fi
 backup
 step 09_pipeline scripts/09_run_pipeline.py --members 8 --limit "$LIMIT_09"
 backup
