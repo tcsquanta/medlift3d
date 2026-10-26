@@ -39,7 +39,9 @@ python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic ph
 | **Kaggle** (free T4) | 10 evaluation tables, 12 demo | need only a 1-2 GB bundle |
 
 Expected time on one L40S: ~16-21 h for 583 patients (estimate scaled from our Kaggle run; details and
-other GPUs in [`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md)).
+other GPUs in [`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md)). On your own **NVIDIA DGX Spark** the same script runs
+in ~1-2 days at no hourly cost; setup (NGC container or Arm64 wheels) in
+[`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md#nvidia-dgx-spark-your-own-machine-instead-of-renting).
 
 ### Part A - RunPod
 

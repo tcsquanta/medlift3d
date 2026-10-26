@@ -132,6 +132,9 @@ uses by default; each decision has its own section further down.
 | D6 | storage | 300 GB container disk + small Global volume | speed vs safety vs monthly cost | [Pod settings](#d6-pod-settings-and-storage-runpod) |
 | D7 | results transfer | zip -> Kaggle dataset (and Google Drive) | effort vs safety | [Getting results out](#d7-getting-the-results-out) |
 
+**Own an NVIDIA DGX Spark?** It runs everything with no hourly cost but more slowly (~1-2 days for 583
+patients): see [NVIDIA DGX Spark](#nvidia-dgx-spark-your-own-machine-instead-of-renting).
+
 Two rules that are not trade-offs:
 
 * **Keep the project settings (`configs/default.yaml`) fixed** for the rented run unless you have a reason
@@ -451,6 +454,175 @@ python scripts/10_evaluate.py
 ```
 
 The 45 GB data is too large for Kaggle's 20 GB working disk; use `medlift_kaggle.zip` there.
+
+## NVIDIA DGX Spark (your own machine instead of renting)
+
+The DGX Spark is NVIDIA's desktop AI computer. MedLift-3D runs on it unchanged: the whole code is plain
+PyTorch (no custom CUDA kernels, no `torch.compile`, no Triton), so the parts of the software stack
+reported as rough on the Spark's new GPU are not used. The Spark costs nothing per hour, but it is slower
+than a rented L40S for this project, because of its memory bandwidth.
+
+### What the hardware means for this project
+
+| | DGX Spark | rented L40S | Kaggle T4 |
+|---|---|---|---|
+| GPU | GB10 Grace Blackwell, 6,144 CUDA cores | L40S | T4 |
+| memory | **128 GB unified** (shared by CPU and GPU) | 48 GB | 16 GB |
+| memory bandwidth | **~273 GB/s** | ~864 GB/s | ~320 GB/s |
+| CPU | 20 Arm cores (10 Cortex-X925 + 10 Cortex-A725) | x86 | x86 |
+| OS | DGX OS (Ubuntu-based, **Arm64**) | Ubuntu x86 | Ubuntu x86 |
+| disk | up to 4 TB NVMe | 300 GB (rented) | 20 GB |
+| cost | free per hour | ~$1.09/h | free, 30 h/week |
+
+* **Memory:** 128 GB fits the full training batch of 8 (~5 GB per sample) with room to spare.
+* **Speed:** the headline "1 PFLOP" is FP4 maths with sparsity. Our 3D U-Net and the X-ray projector move
+  a lot of data through memory, and the Spark's ~273 GB/s is close to a T4's. Expected GPU speed (estimate,
+  measure it): **~1.5-3x one Kaggle T4, ~0.3-0.7x an RTX 4090**.
+* **Arm CPU:** use NVIDIA's container or the Arm64 PyTorch wheels (below); every other package we use
+  (numpy, scipy, scikit-image, pydicom, pylidc, sqlalchemy, gradio, plotly) has Arm64 builds or is pure Python.
+* **Disk:** 4 TB is plenty: keep the DICOM, the prepared data and every result on the machine.
+
+### Time estimate (scaled from the Kaggle run, not measured on a Spark)
+
+| step | 583 patients | 300 patients |
+|---|---|---|
+| 02-03 select + download 64 / 33 GB | 1-7 h (your internet) | 0.5-4 h |
+| 04 cases (CPU) | ~2 h | ~1 h |
+| 05-07 DTS, SIRT, training pairs | ~5-9 h | ~3-5 h |
+| 08 diffusion training | your choice, e.g. 8-12 h | 8-12 h |
+| 14 detector | ~0.5 h | ~0.5 h |
+| 09 measure (150 / 100 nodules, K = 8) | ~5-12 h | ~3.5-8 h |
+| 11 growth (20 nodules) | ~2-5 h | ~2-5 h |
+| **total** | **~25-45 h (1-2 days)** | **~17-30 h** |
+
+Before a deadline: start the Spark run early, check its speed after the first hour (below), and keep the
+Kaggle 40-patient results as a safety net. If the measured speed is low, a rented L40S (~16-21 h) is faster.
+
+### Setup, option A (recommended): NVIDIA's PyTorch container
+
+NVIDIA builds and tests these containers for its hardware, so PyTorch, CUDA and the GPU driver match.
+
+1. **Check the machine** (in a terminal on the Spark, or over SSH):
+   ```bash
+   nvidia-smi                       # shows the GB10 GPU
+   docker --version
+   sudo usermod -aG docker $USER && newgrp docker     # run docker without sudo (once)
+   docker run --rm --gpus all ubuntu nvidia-smi       # GPU visible inside containers?
+   ```
+   If the last command fails with "could not select device driver", register the NVIDIA runtime once:
+   `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker`.
+
+2. **Pull the container.** `25.09-py3` (CUDA 13) is reported to work on the Spark; NVIDIA's DGX Spark NGC
+   page uses `24.08-py3` as its example. Try the newer one first; if you see CUDA or driver errors, use the
+   tag NVIDIA lists for DGX Spark in the NGC catalog.
+   ```bash
+   docker pull nvcr.io/nvidia/pytorch:25.09-py3
+   ```
+   If Docker asks you to log in: `docker login nvcr.io`, user name `$oauthtoken`, password = your NGC API key
+   (free account at ngc.nvidia.com).
+
+3. **Start it inside tmux on the Spark** (so it keeps running when you close the terminal or SSH session).
+   Everything goes into `~/medlift_work` on the Spark's own disk, mounted as `/workspace`:
+   ```bash
+   sudo apt-get install -y tmux      # if missing
+   tmux new -s ml                    # detach: Ctrl-b d   re-attach: tmux attach -t ml
+   mkdir -p ~/medlift_work
+   docker run --gpus all -it --name medlift --ipc=host \
+     --ulimit memlock=-1 --ulimit stack=67108864 \
+     -v ~/medlift_work:/workspace nvcr.io/nvidia/pytorch:25.09-py3
+   ```
+   `--ipc=host` gives the data loaders enough shared memory. No `--rm`: the container is kept, so later
+   `docker start -ai medlift` (or `docker exec -it medlift bash`) brings you back to the same environment.
+
+4. **Inside the container: check the GPU, then install the project:**
+   ```bash
+   python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)); x = torch.randn(2048, 2048, device='cuda'); print((x @ x).float().abs().mean().item())"
+   cd /workspace
+   git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
+   cd medlift3d
+   pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest    # NOT torch: keep the container's
+   python scripts/00_check_env.py
+   python -m pytest -q                                                                # all tests must pass
+   ```
+   The first command must print a CUDA 12.x/13.x version, the GPU name and a number, with no error.
+
+### Setup, option B: native Python with the Arm64 PyTorch wheels
+
+Without Docker. PyTorch publishes Arm64 (aarch64) CUDA 13.0 wheels; plain `pip` can silently pull a
+different torch when other packages are installed, so install torch from the CUDA 13.0 index and check it.
+
+```bash
+sudo apt-get install -y python3-venv tmux git
+python3 -m venv ~/medlift_env && source ~/medlift_env/bin/activate
+pip install --upgrade pip
+pip install torch --index-url https://download.pytorch.org/whl/cu130
+pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_capability(0))"
+#   torch.version.cuda must start with 13 -- otherwise another package replaced torch: reinstall it as above
+mkdir -p ~/medlift_work && cd ~/medlift_work
+git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git && cd medlift3d
+python scripts/00_check_env.py && python -m pytest -q
+```
+
+With option B, set the output paths of `runpod_run.sh` to your home folder (there is no `/workspace`):
+`BACKUP=~/medlift_work/backup BUNDLE=~/medlift_work/medlift_kaggle.zip FULL=~/medlift_work/medlift_full_results.zip`.
+
+### Run
+
+The same one-command run as on RunPod, inside tmux. On your own 4 TB disk nothing needs deleting, and with
+no hourly cost you can train longer:
+
+```bash
+cd /workspace/medlift3d               # option B: cd ~/medlift_work/medlift3d (+ the paths above)
+KEEP_DICOM=1 WITH_DATA=1 N_PATIENTS=583 TRAIN_HOURS=10 bash scripts/runpod_run.sh
+```
+
+| setting | Spark recommendation | why |
+|---|---|---|
+| `N_PATIENTS` | 583 (300 if short on time) | see D3 |
+| `TRAIN_HOURS` | 8-12 | free per hour; slower GPU, so more hours give the same amount of training as ~6 h on an L40S |
+| `--batch-size` | 8 (the script's default) | fits easily; a larger batch is not expected to be faster (memory-bandwidth bound) |
+| `LIMIT_09` / `LIMIT_11` | 150 / 20 (100 / 20 if short on time) | step 9 is the second-longest step |
+| `KEEP_DICOM` / `WITH_DATA` | 1 / 1 | disk is plentiful; you can re-run any step later without downloading again |
+
+### Check the speed after the first hour of training
+
+`tail -f logs/08_train.log` and compute **samples per second = 8 / (the logged `s/step`)**:
+
+| machine | samples / s |
+|---|---|
+| Kaggle 1x T4 (measured: 2x T4 gave 4.2) | ~2.3 |
+| DGX Spark (estimate) | ~3.5-7 |
+| RTX 4090 / L40S (estimate) | ~9-14 |
+
+Below ~3.5 samples/s, 583 patients will take close to 2 days: reduce to `N_PATIENTS=300`, `LIMIT_09=100`,
+or rent an L40S.
+
+### Troubleshooting
+
+| message | cause | fix |
+|---|---|---|
+| `no kernel image is available for execution on the device` | the PyTorch build does not support the GB10 GPU | use the NGC container (option A) or the cu130 wheels (option B); check `torch.version.cuda` starts with 13 for wheels |
+| `could not select device driver "" with capabilities: [[gpu]]` | Docker does not know the NVIDIA runtime | `sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker` |
+| `DataLoader worker ... bus error` / shared memory | container shared memory too small | add `--ipc=host` to `docker run` |
+| `torch.version.cuda` is 12.x or `None` after installing packages | pip replaced torch | option B: reinstall from the cu130 index; option A: never `pip install torch` in the container |
+| out of memory | the 128 GB is shared with the CPU | close other programs; step 8 lowers the batch automatically |
+| download from TCIA is slow | your internet / TCIA | see "If TCIA downloads are slow or blocked" below |
+
+### After the run
+
+* Everything stays on the Spark (`~/medlift_work`). Copy `medlift_full_results.zip` and `medlift_kaggle.zip`
+  to Google Drive with rclone (its installer supports Arm64; see "Saving everything to Google Drive").
+* The demo runs directly on the Spark: `python scripts/12_demo_app.py --selftest`, then
+  `python scripts/12_demo_app.py --share` for a public link. Or use the Kaggle bundle on Kaggle as before.
+
+Sources for the hardware and setup details: [NVIDIA DGX Spark hardware overview](https://docs.nvidia.com/dgx/dgx-spark/hardware.html),
+[NVIDIA DGX Spark: NGC containers](https://docs.nvidia.com/dgx/dgx-spark/ngc.html),
+[NVIDIA forum: PyTorch and CUDA on DGX Spark](https://forums.developer.nvidia.com/t/effective-pytorch-and-cuda/348230),
+[Arm learning path: DGX Spark runtime setup](https://learn.arm.com/learning-paths/laptops-and-desktops/dgx_persistent_agent/2_build/),
+[DGX Spark setup notes (PyTorch cu130 wheels)](https://github.com/natolambert/dgx-spark-setup).
+Software versions for the Spark change quickly: check NVIDIA's DGX Spark documentation for the current
+recommended container.
 
 ## Manual step-by-step (any rented GPU)
 
