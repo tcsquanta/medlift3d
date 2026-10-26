@@ -166,6 +166,9 @@ dose) and runs the physics-only methods on the same nodules.
 * Read the widths (normalised narrower than standard = the ensemble spread is informative), the per-size-group
   coverage (Mondrian should bring every group near 90%), and the Brier / ECE of P(V >= 100 / 300 mm3) (EUPS categories)
   (conformal vs ensemble vote). These are results (H5), not code checks. Details: [`XAI_UQ.md`](XAI_UQ.md).
+* Plots `{volume,mass}_uq_overview.png`: prediction intervals, regression with intervals, residuals, residual
+  histogram, Q-Q, interval widths, coverage at every level, a predictive distribution. The coverage-level
+  panel should follow the diagonal for the conformal lines.
 
 ## Step 17 - explainability (`17_explain.py`)
 * PASS: the seen / unseen split is accurate (median |A unseen| / |A x| < 0.05).

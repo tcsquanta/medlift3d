@@ -19,7 +19,13 @@ Questions it answers (outputs/16_uncertainty/):
                          category sets that contain the true category 90% of the time.
   table_uq_methods.md    every method: interval coverage / width, CRPS, Brier scores.
   uq_test_nodules.csv    per test nodule: estimate, interval, P(>= 100), P(>= 300), category set, truth.
-  reliability.png, cpd_examples.png, group_coverage.png
+  reliability.png, group_coverage.png
+  {volume,mass}_*.png    uncertainty plots of the test nodules (conformal, normalised by the ensemble spread):
+                         cpd_examples / cpd_median_nodule (conformal predictive distributions), intervals
+                         (prediction intervals), regression (estimate vs truth with intervals), residuals,
+                         residual_hist (distribution of residuals), qq (Q-Q of residuals), interval_widths
+                         (distribution of interval widths), coverage_levels (coverage at every confidence
+                         level); {qty}_uq_overview.png has all eight panels
 """
 import csv
 import math
@@ -156,6 +162,8 @@ def main():
             mond = [v for v in res if v["variant"] == "Mondrian + normalised"][0]
             ck.info(f"{qty}: worst size-group coverage, normalised -> Mondrian + normalised",
                     f"{pct(nrm['worst_group'])} -> {pct(mond['worst_group'])}")
+    for qty, (C, T, res, models, _, _) in keep.items():           # the uncertainty plots, one file each
+        save_diagnostics(out, qty, C, T, res, models, floor, lev)
     with open(os.path.join(out, "table_uq_intervals.md"), "w") as f:
         f.write("\n".join(int_lines) + f"\n\nMethod: {LABEL.get(method, method)}. Calibrated on {len(cal)} cal nodules, "
                 f"tested on {len(test)} test nodules. Width = (upper - lower) / estimate. CRPS = how close the whole "
@@ -209,7 +217,6 @@ def main():
         b_vote = brier(probs["ensemble vote (uncalibrated)"][:, 2], T["truth"] >= 300)
         ck.info("Brier P(V >= 300 mm3): conformal vs ensemble vote (lower = better)", f"{b_conf:.3f} vs {b_vote:.3f}")
         save_reliability(os.path.join(out, "reliability.png"), rel)
-        save_cpd_examples(os.path.join(out, "cpd_examples.png"), m, T, gtest)
         save_group_coverage(os.path.join(out, "group_coverage.png"), res, 1 - alpha)
         pr = probs[f"conformal ({name})"]
         with open(os.path.join(out, "uq_test_nodules.csv"), "w", newline="") as f:
@@ -283,29 +290,210 @@ def save_reliability(path, rel):
     plt.close(fig)
 
 
-def save_cpd_examples(path, m, T, groups, n=4):
+# ---- diagnostic plots per quantity (main variant: normalised by the ensemble spread) -----------------
+UNIT = {"volume": "mm3", "mass": "mg"}
+MAIN = "normalised by ensemble spread"
+
+
+def _finite(lo, hi):
+    lo, hi = np.asarray(lo, float).copy(), np.asarray(hi, float).copy()
+    bad = ~(np.isfinite(lo) & np.isfinite(hi) & (lo > 0))
+    lo[bad], hi[bad] = np.nan, np.nan
+    return lo, hi
+
+
+def ax_intervals(a, T, lo, hi, qty, lev):
+    """Prediction intervals of all test nodules, sorted by the estimate; truth inside green, outside red."""
+    o = np.argsort(T["pred"])
+    x = np.arange(len(o))
+    lo, hi = _finite(lo[o], hi[o])
+    inside = (T["truth"][o] >= lo) & (T["truth"][o] <= hi)
+    a.vlines(x, lo, hi, color="tab:blue", alpha=0.35, lw=3, label=f"{lev}% interval")
+    a.plot(x, T["pred"][o], "_", color="black", ms=7, label="estimate")
+    a.plot(x[inside], T["truth"][o][inside], "o", color="tab:green", ms=3.5, label="truth inside")
+    a.plot(x[~inside], T["truth"][o][~inside], "o", color="tab:red", ms=3.5, label="truth outside")
+    a.set_yscale("log"), a.set_xlabel("test nodules, sorted by estimate"), a.set_ylabel(f"{qty} ({UNIT[qty]})")
+    a.set_title(f"prediction intervals (coverage {100 * np.mean(inside):.0f}%)", fontsize=9)
+    a.legend(fontsize=6, loc="upper left"), a.grid(alpha=0.3)
+
+
+def ax_regression(a, T, lo, hi, qty, lev):
+    """Estimate vs truth with each nodule's interval as a vertical bar: covered if the bar crosses y = x."""
+    lo, hi = _finite(lo, hi)
+    inside = (T["truth"] >= lo) & (T["truth"] <= hi)
+    for m, col in ((inside, "tab:green"), (~inside, "tab:red")):
+        a.vlines(T["truth"][m], lo[m], hi[m], color=col, alpha=0.4, lw=1.5)
+        a.plot(T["truth"][m], T["pred"][m], "o", color=col, ms=3)
+    v = np.concatenate([T["truth"], T["pred"]])
+    v = v[v > 0]
+    lim = [v.min() / 1.5, v.max() * 1.5]
+    a.plot(lim, lim, color="gray", lw=0.8, ls="--", label="estimate = truth")
+    a.set_xscale("log"), a.set_yscale("log"), a.set_xlim(lim), a.set_ylim(lim)
+    a.set_xlabel(f"truth ({UNIT[qty]})"), a.set_ylabel(f"estimate and {lev}% interval ({UNIT[qty]})")
+    a.set_title("regression with uncertainty (bar crosses the line = covered)", fontsize=9)
+    a.legend(fontsize=6, loc="upper left"), a.grid(alpha=0.3)
+
+
+def ax_residuals(a, C, T, lo, hi, qty):
+    """log(truth / estimate) against the estimate; the bars are the intervals in the same units."""
+    lo, hi = _finite(lo, hi)
+    r_t = np.log(T["truth"] / T["pred"])
+    inside = (T["truth"] >= lo) & (T["truth"] <= hi)
+    a.plot(C["pred"], np.log(C["truth"] / C["pred"]), ".", color="gray", ms=4, alpha=0.6, label="cal nodules")
+    a.vlines(T["pred"], np.log(lo / T["pred"]), np.log(hi / T["pred"]), color="tab:blue", alpha=0.25, lw=2,
+             label="interval")
+    a.plot(T["pred"][inside], r_t[inside], "o", color="tab:green", ms=3, label="test, inside")
+    a.plot(T["pred"][~inside], r_t[~inside], "o", color="tab:red", ms=3, label="test, outside")
+    a.axhline(0, color="black", lw=0.8)
+    a.set_xscale("log"), a.set_xlabel(f"estimate ({UNIT[qty]})"), a.set_ylabel("residual log(truth / estimate)")
+    a.set_title("residuals vs estimate (0.1 = 10% too low)", fontsize=9)
+    a.legend(fontsize=6), a.grid(alpha=0.3)
+
+
+def ax_residual_hist(a, C, T):
+    """Histogram of the residuals (cal and test) with the normal curve a Gaussian method would assume."""
+    from scipy.stats import norm
+
+    rc, rt = np.log(C["truth"] / C["pred"]), np.log(T["truth"] / T["pred"])
+    rc, rt = rc[np.isfinite(rc)], rt[np.isfinite(rt)]
+    bins = np.linspace(min(rc.min(), rt.min()), max(rc.max(), rt.max()), 30)
+    a.hist(rc, bins, density=True, color="gray", alpha=0.5, label=f"cal (n={len(rc)})")
+    a.hist(rt, bins, density=True, histtype="step", color="tab:blue", lw=1.5, label=f"test (n={len(rt)})")
+    x = np.linspace(bins[0], bins[-1], 200)
+    a.plot(x, norm.pdf(x, rc.mean(), rc.std()), "k--", lw=1, label="normal fit (cal)")
+    for q in np.quantile(rc, [0.05, 0.95]):
+        a.axvline(q, color="tab:orange", lw=1)
+    a.axvline(0, color="black", lw=0.6)
+    a.set_xlabel("residual log(truth / estimate)"), a.set_ylabel("density")
+    a.set_title(f"distribution of residuals (mean {rc.mean():+.2f} = bias; orange: cal 5% / 95%)", fontsize=9)
+    a.legend(fontsize=6), a.grid(alpha=0.3)
+
+
+def ax_qq(a, C, floor):
+    """Normal Q-Q plot of the calibration residuals: points off the line = not Gaussian (tails, skew)."""
+    from scipy.stats import probplot
+
+    r = np.log(C["truth"] / C["pred"])
+    s = r / (C["sigma"] + floor)
+    for v, col, lab in ((r, "tab:gray", "residuals"), (s, "tab:blue", "residuals / ensemble spread (the scores)")):
+        v = v[np.isfinite(v)]
+        if len(v) < 3 or np.std(v) == 0:
+            continue
+        (q, z), _ = probplot((v - v.mean()) / v.std(), dist="norm")
+        a.plot(q, z, ".", color=col, ms=4, label=lab)
+    lim = [-3, 3]
+    a.plot(lim, lim, color="black", lw=0.8, ls="--", label="normal")
+    a.set_xlabel("normal quantiles"), a.set_ylabel("standardised residual quantiles")
+    a.set_title("Q-Q of calibration residuals (conformal does not need normality)", fontsize=9)
+    a.legend(fontsize=6, loc="upper left"), a.grid(alpha=0.3)
+
+
+def ax_widths(a, res, T, lev):
+    """Distribution of the relative interval widths per variant (standard: one width for everyone)."""
+    w_all = {}
+    for v in res:
+        lo, hi = _finite(v["lo"], v["hi"])
+        w = (hi - lo) / T["pred"]
+        w_all[v["variant"]] = w[np.isfinite(w) & (w > 0)]
+    vals = np.concatenate([w for w in w_all.values() if len(w)]) if any(len(w) for w in w_all.values()) else np.array([1.0])
+    bins = np.geomspace(max(vals.min() * 0.8, 1e-3), vals.max() * 1.25, 30)
+    for name, w in w_all.items():
+        if len(w):
+            a.hist(w * 1.0, bins, histtype="step", lw=1.5, label=f"{name} (median {100 * np.median(w):.0f}%)")
+    from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter
+
+    a.set_xscale("log")
+    a.xaxis.set_major_locator(FixedLocator([t for t in (0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16) if bins[0] <= t <= bins[-1]]))
+    a.xaxis.set_major_formatter(FuncFormatter(lambda t, _: f"{100 * t:.0f}%"))
+    a.xaxis.set_minor_formatter(NullFormatter())
+    a.set_xlabel(f"{lev}% interval width / estimate"), a.set_ylabel("test nodules")
+    a.set_title("distribution of interval widths (narrow AND covering = good)", fontsize=9)
+    a.legend(fontsize=6), a.grid(alpha=0.3)
+
+
+def ax_coverage_levels(a, C, T, floor):
+    """Empirical test coverage at every confidence level: conformal vs the raw ensemble spread."""
+    from scipy.stats import norm
+
+    levels = np.array([0.5, 0.6, 0.7, 0.8, 0.9, 0.95])
+    std = LogCPS(False, floor).fit(C["pred"], C["sigma"], C["truth"])
+    nrm = LogCPS(True, floor).fit(C["pred"], C["sigma"], C["truth"])
+    cov = {"conformal, standard": [], "conformal, normalised": [], "ensemble spread as +-z sd (uncalibrated)": []}
+    for L in levels:
+        for name, m in (("conformal, standard", std), ("conformal, normalised", nrm)):
+            lo, hi = m.interval(T["pred"], T["sigma"], 1 - L)
+            cov[name].append(coverage(lo, hi, T["truth"]))
+        z = norm.ppf(0.5 + L / 2)
+        lo, hi = T["pred"] * np.exp(-z * (T["sigma"] + floor)), T["pred"] * np.exp(z * (T["sigma"] + floor))
+        cov["ensemble spread as +-z sd (uncalibrated)"].append(coverage(lo, hi, T["truth"]))
+    a.plot([0.45, 1], [0.45, 1], color="gray", lw=0.8, ls="--", label="ideal")
+    for name, c in cov.items():
+        a.plot(levels, c, "o-", ms=4, label=name)
+    a.set_xlim(0.45, 1), a.set_ylim(0, 1.02)
+    a.set_xlabel("nominal confidence level"), a.set_ylabel("observed coverage (test)")
+    a.set_title("coverage at every level (on the diagonal = calibrated)", fontsize=9)
+    a.legend(fontsize=6, loc="lower right"), a.grid(alpha=0.3)
+
+
+def ax_cpd(a, m, T, i, qty, groups=None):
+    """One nodule's conformal predictive distribution."""
+    top = max(T["truth"][i], T["pred"][i])
+    grid = np.geomspace(max(top * 0.05, 0.1), top * 5, 200)
+    a.plot(grid, m.cdf_curve(T["pred"][i], T["sigma"][i], grid, None if groups is None else groups[i]),
+           color="tab:blue", label=f"calibrated P({qty} <= v)")
+    a.axvline(T["truth"][i], color="tab:green", label="truth")
+    a.axvline(T["pred"][i], color="tab:blue", ls=":", label="estimate")
+    if qty == "volume":
+        for t in VOLUME_THRESHOLDS_MM3:
+            if grid[0] < t < grid[-1]:
+                a.axvline(t, color="tab:red", ls="--", lw=0.8)
+    a.set_xscale("log"), a.set_ylim(0, 1), a.set_xlabel(f"{qty} ({UNIT[qty]})"), a.set_ylabel("probability")
+    a.set_title(str(T["rows"][i].get("nid", T["rows"][i]["case_id"]))[:28], fontsize=8)
+    a.legend(fontsize=6), a.grid(alpha=0.3)
+
+
+def save_cpd_grid(path, m, T, qty, n=4):
     plt = _plt()
     order = np.argsort(T["truth"])
     pick = order[np.linspace(0, len(order) - 1, min(n, len(order))).astype(int)]
     fig, ax = plt.subplots(1, len(pick), figsize=(3.6 * len(pick), 3.4), squeeze=False)
     for a, i in zip(ax[0], pick):
-        lo, hi = max(T["truth"][i], T["pred"][i]) * 0.1, max(T["truth"][i], T["pred"][i]) * 4
-        grid = np.geomspace(max(lo, 1.0), hi, 200)
-        cdf = m.cdf_curve(T["pred"][i], T["sigma"][i], grid, None if groups is None else groups[i])
-        a.plot(grid, cdf, color="tab:blue", label="calibrated P(V <= v)")
-        a.axvline(T["truth"][i], color="tab:green", label="truth")
-        a.axvline(T["pred"][i], color="tab:blue", ls=":", label="estimate")
-        for t in VOLUME_THRESHOLDS_MM3:
-            a.axvline(t, color="tab:red", ls="--", lw=0.8)
-        a.set_xscale("log"), a.set_ylim(0, 1), a.set_xlabel("volume (mm3)")
-        a.set_title(str(T["rows"][i].get("nid", T["rows"][i]["case_id"]))[:28], fontsize=8)
-        a.grid(alpha=0.3)
-    ax[0][0].set_ylabel("probability")
-    ax[0][0].legend(fontsize=7)
-    fig.suptitle("conformal predictive distributions of 4 test nodules (red: EUPS 100 / 300 mm3)", fontsize=9)
+        ax_cpd(a, m, T, i, qty)
+    fig.suptitle(f"conformal predictive distributions of {len(pick)} test nodules"
+                 + (" (red: EUPS 100 / 300 mm3)" if qty == "volume" else ""), fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
+
+
+def save_diagnostics(out, qty, C, T, res, models, floor, lev):
+    """Each uncertainty plot as its own file ({qty}_*.png) plus an overview ({qty}_uq_overview.png)."""
+    plt = _plt()
+    v = next(x for x in res if x["variant"] == MAIN)
+    lo, hi = v["lo"], v["hi"]
+    m = models[MAIN][0]
+    panels = [("intervals", lambda a: ax_intervals(a, T, lo, hi, qty, lev)),
+              ("regression", lambda a: ax_regression(a, T, lo, hi, qty, lev)),
+              ("residuals", lambda a: ax_residuals(a, C, T, lo, hi, qty)),
+              ("residual_hist", lambda a: ax_residual_hist(a, C, T)),
+              ("qq", lambda a: ax_qq(a, C, floor)),
+              ("interval_widths", lambda a: ax_widths(a, res, T, lev)),
+              ("coverage_levels", lambda a: ax_coverage_levels(a, C, T, floor)),
+              ("cpd_median_nodule", lambda a: ax_cpd(a, m, T, int(np.argsort(T["truth"])[len(T["truth"]) // 2]), qty))]
+    for name, draw in panels:
+        fig, a = plt.subplots(figsize=(5.2, 4.2))
+        draw(a)
+        fig.tight_layout()
+        fig.savefig(os.path.join(out, f"{qty}_{name}.png"), dpi=130)
+        plt.close(fig)
+    fig, ax = plt.subplots(2, 4, figsize=(21, 9.5))
+    for a, (_, draw) in zip(ax.ravel(), panels):
+        draw(a)
+    fig.suptitle(f"{qty}: uncertainty diagnostics on the test nodules (conformal, {MAIN})", fontsize=11)
+    fig.tight_layout()
+    fig.savefig(os.path.join(out, f"{qty}_uq_overview.png"), dpi=110)
+    plt.close(fig)
+    save_cpd_grid(os.path.join(out, f"{qty}_cpd_examples.png"), m, T, qty)
 
 
 def save_group_coverage(path, res, target):

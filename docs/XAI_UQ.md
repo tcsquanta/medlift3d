@@ -47,8 +47,27 @@ for every v. From that we get:
 | `table_uq_groups.md`, `group_coverage.png` | coverage per size group: does plain conformal under-cover small nodules, and does Mondrian fix it? |
 | `table_uq_risk.md`, `reliability.png` | Brier score and calibration error (ECE) of P(V >= 100), P(V >= 300): lower is better; calibrated probabilities should lie on the diagonal of the reliability plot. Category sets: how often they contain the true category, and how often they are a single category |
 | `table_uq_methods.md` | the same for every method (ours vs physics-only) |
-| `cpd_examples.png` | the calibrated distribution of 4 test nodules with the truth and the EUPS thresholds |
 | `uq_test_nodules.csv` | per test nodule: estimate, 90% interval, P(>= 100), P(>= 300), category set, truth |
+
+### The uncertainty plots (`{volume,mass}_*.png`, all eight in `{volume,mass}_uq_overview.png`)
+
+Test nodules, our method, conformal intervals normalised by the ensemble spread (the pre-specified main
+variant). Residuals are in log space, log(truth / estimate): 0.1 means the estimate is about 10% too low,
+-0.1 about 10% too high (errors of volumes and masses are multiplicative).
+
+| plot | file | what it shows | what you want to see |
+|---|---|---|---|
+| conformal predictive distribution | `_cpd_examples.png`, `_cpd_median_nodule.png` | for one nodule, the calibrated probability that the true value is below v, for every v (EUPS thresholds in red for volume) | a steep curve (sure) around the truth; flat = unsure |
+| prediction intervals | `_intervals.png` | every test nodule's 90% interval (bar), estimate (dash) and truth (dot), sorted by the estimate | ~90% green dots; bars wider where nodules are hard |
+| regression with uncertainty | `_regression.png` | estimate vs truth, each interval as a vertical bar | points near the diagonal; a bar that crosses the diagonal = covered |
+| residuals | `_residuals.png` | residual vs estimate, with each interval in the same units; grey = cal nodules | no trend with size (else size-dependent bias); red points = misses |
+| distribution of residuals | `_residual_hist.png` | histogram of cal and test residuals, the normal curve a Gaussian method would assume, the cal 5% / 95% quantiles | centred near 0 (mean = bias); cal and test alike (exchangeable); skew or heavy tails are fine for conformal |
+| Q-Q of residuals | `_qq.png` | residuals (and residuals / ensemble spread, the conformal scores) against normal quantiles | points off the line in the tails = not Gaussian: this is why distribution-free conformal intervals are used instead of +-1.645 sd |
+| distribution of interval widths | `_interval_widths.png` | relative width of the 90% intervals per variant | standard: one width for all; normalised / Mondrian: spread out; narrower at the same coverage = more informative |
+| coverage at every level | `_coverage_levels.png` | observed coverage at 50-95% nominal, for conformal (standard, normalised) and the raw ensemble spread read as +-z sd | conformal on the diagonal; the uncalibrated spread usually below it (over-confident) |
+
+`reliability.png` (calibration of P(V >= 100 / 300 mm3)) and `group_coverage.png` (coverage per size group)
+complete the set.
 
 **In the demo:** every report now shows the calibrated category probabilities, e.g.
 `EUPS category, calibrated probability (step 16): < 100 mm3: 4% | 100-300 mm3: 71% | >= 300 mm3: 25%`
