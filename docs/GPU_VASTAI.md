@@ -174,6 +174,12 @@ change daily.
 
 * **L40S** = best value: fits the full batch of 8, slightly faster than a 4090, ~60% of the A100 price.
 * **A100 SXM** if finishing ~4 h earlier is worth ~$8. **A40** only if money is very tight and time is not.
+* **A40 vs L40S, per unit of work:** the A40 (Ampere, 48 GB, ~696 GB/s) does ~55-65% of an L40S's work per
+  hour for ~54% of the price, so the same amount of GPU work costs about the same. It is only cheaper
+  overall because the GPU-independent hours (download, step 4) are billed at $0.59 instead of $1.09
+  (~$3-5 saved), and it takes ~1.5x as long. In the same `TRAIN_HOURS` it trains on ~45% fewer samples:
+  use `TRAIN_HOURS=10` on an A40 to match 6 h on an L40S. Expected speed at batch 8: ~5-9 samples/s
+  (~0.9-1.6 s/step; estimate).
 * Skip: H100 (our small 3D model cannot use its speed), 24 GB cards (half the batch), anything smaller.
 * About 4-6 h of a full run does not depend on the GPU at all: the 64 GB download and step 4
   (DICOM -> cases) run on the CPU and network.
