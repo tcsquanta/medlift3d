@@ -47,7 +47,7 @@ CPU pod (section 3) can do them while you are not paying for the L40S.
 * **$15 is not enough.** One full run on an L40S costs about **$18-24** (16-21 h x $1.09/h + disk). If the
   balance runs out, RunPod **stops the pod**, and a stopped pod loses its container disk (all data and the
   running training). The backups on the Global volume survive, but the run is interrupted.
-* **Add at least $15-20** (balance ~$30-35) for one run. Make it **~$45** if you might continue training
+* **Add at least $15-20** (balance ~$30-35) for one run. Make it **about $45** if you might continue training
   (section 9: 3 more training hours + steps 9 / 11 again = ~$9-12 more).
 * Billing is per second while the pod runs. **Terminate** the pod when finished (section 8); a stopped pod
   still charges for its disk.
