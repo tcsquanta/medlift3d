@@ -73,6 +73,8 @@ class DemoSession:
         self.method = "diffusion_gs" if self.model is not None else "roi_gs"
         cal = calibration or os.path.join(cfg["paths"]["outputs"], "10_evaluation", "conformal.json")
         self.calib = json.load(open(cal)) if os.path.exists(cal) else {}
+        cps = os.path.join(cfg["paths"]["outputs"], "16_uncertainty", "cps_calibration.json")
+        self.cps = json.load(open(cps)) if os.path.exists(cps) else None      # step 16: category probabilities
         self.case: Optional[Case] = None
         self.ctx: Optional[CaseContext] = None
         self.candidates: List[Dict] = []
@@ -254,6 +256,12 @@ class DemoSession:
                   "seconds": secs, "members": members, "spread_factor": float(np.exp(2 * e["mass_log_std"])),
                   "low_confidence": bool(e.get("n_found", e["n_members"]) < 0.5 * e["n_members"] + 0.01
                                          or np.exp(2 * max(e["mass_log_std"], e["volume_log_std"])) > 10.0)}
+        cal = (self.cps or {}).get("methods", {}).get(method)      # step 16's calibration of this method
+        if cal is not None and e["volume_mm3"] > MIN_MEASURABLE:
+            from .uq import CATEGORIES, category_probs_from_calibration
+
+            p = category_probs_from_calibration(cal, e["volume_mm3"], e["volume_log_std"])
+            report["category_probs"] = {c: float(v) for c, v in zip(CATEGORIES, p)}
         self.last = {"res": res, "entry": e, "report": report, "click": list(click_xyz), "method": method}
         return report
 

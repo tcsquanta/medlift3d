@@ -160,6 +160,21 @@ dose) and runs the physics-only methods on the same nodules.
   denoising loss < 1.15; detector train CPM - cal CPM < 0.15.
 * How to act on it: [`RUNPOD_FULL_RUN.md`, sections 7 and 9](RUNPOD_FULL_RUN.md#7-is-the-model-under--or-overfitting).
 
+## Step 16 - uncertainty with conformal predictive systems (`16_uncertainty.py`)
+* PASS: CPS 90% intervals cover ~90% of test nodules (volume, mass). The row "cross-check: step 10's own
+  implementation" should match "normalised by ensemble spread" closely (same method, two implementations).
+* Read the widths (normalised narrower than standard = the ensemble spread is informative), the per-size-group
+  coverage (Mondrian should bring every group near 90%), and the Brier / ECE of P(V >= 100 / 300 mm3) (EUPS categories)
+  (conformal vs ensemble vote). These are results (H5), not code checks. Details: [`XAI_UQ.md`](XAI_UQ.md).
+
+## Step 17 - explainability (`17_explain.py`)
+* PASS: the seen / unseen split is accurate (median |A unseen| / |A x| < 0.05).
+* PASS: the true nodule's mass is seen (unseen share of the box mass < 10%) -- the mechanism of H1.
+* Results (H6): unseen share of the true nodules (how much DTS cannot see), unseen skill of ours (> 0 = the
+  prior recovers the invisible part, < 0 = it invents), error drivers, detector saliency true vs false
+  positives. Figures `<nodule>_seen_unseen.png`: truth row = compact blob / depth-smeared seen part / sharp
+  core with negative side lobes as unseen part; ROI-SIRT row has an (almost) empty unseen column.
+
 ## Smoke test (`smoke_test.py`)
 Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~45 min on 4 cores) and prints one table.
 "SCIENCE-FAIL" lines are expected at this scale (tiny model trained for minutes on 2-3 mm voxels;

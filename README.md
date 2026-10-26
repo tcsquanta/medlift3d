@@ -39,7 +39,7 @@ python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic ph
 | where | steps | why |
 |---|---|---|
 | **RunPod** (L40S 48 GB, ~$1.09/h) | 02-08 data + diffusion training, 14 detector, 09 all methods, 11 growth (+ 10) | need a big GPU and the full 583-patient data (~45 GB) |
-| **Kaggle** (free T4) | 10 evaluation tables, 12 demo | need only a 1-2 GB bundle |
+| **Kaggle** (free T4) | 10 evaluation tables, 16 uncertainty, 17 explainability, 12 demo | need only a 1-2 GB bundle |
 
 Expected time on one L40S: ~16-21 h for 583 patients (estimate scaled from our Kaggle run; details and
 other GPUs in [`docs/GPU_VASTAI.md`](docs/GPU_VASTAI.md)). On your own **NVIDIA DGX Spark** the same script runs
@@ -59,7 +59,7 @@ tmux new -s ml                         # detach: Ctrl-b d   re-attach: tmux atta
 cd /root
 git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
 cd medlift3d
-pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest
+pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest crepes scikit-learn
 python scripts/00_check_env.py         # GPU listed?
 python -m pytest -q                    # all tests must pass
 ```
@@ -72,7 +72,7 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh
 
 [`scripts/runpod_run.sh`](scripts/runpod_run.sh) runs steps 02-04 (and deletes the 64 GB of DICOM once the
 cases are built), 05-07, 08 (diffusion training, stops itself after `TRAIN_HOURS`), 14, 09 (150 nodules),
-11 (20 nodules x 2 follow-ups), 10 and 15 (fit check); one log per step in `logs/`; after every step a copy of models,
+11 (20 nodules x 2 follow-ups), 10, 15 (fit check), 16 (uncertainty) and 17 (explainability, 30 nodules); one log per step in `logs/`; after every step a copy of models,
 results, outputs and logs in `/workspace/medlift_backup`; at the end two zips:
 
 | file | contents | size | for |
@@ -125,7 +125,7 @@ Cell 1 - setup
 ```bash
 !git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
 %cd medlift3d
-!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly crepes scikit-learn
 ```
 
 Cell 2 - copy the bundle in (finds it wherever Kaggle put it)
@@ -149,13 +149,21 @@ Cell 3 - evaluation tables (step 10, ~1 min)
 !cat outputs/11_growth/table_growth.md outputs/14_detector/table_detection.md
 ```
 
-Cell 4 - demo
+Cell 4 - uncertainty (step 16, seconds) and explainability (step 17, ~30-50 min; `--skip-maps`: minutes)
+```bash
+!python scripts/16_uncertainty.py
+!python scripts/17_explain.py --limit 12 --members 4 --outputs /kaggle/working/outputs_kaggle
+!cat outputs/16_uncertainty/table_uq_*.md /kaggle/working/outputs_kaggle/17_explain/table_*.md
+```
+What they mean and what is new: [`docs/XAI_UQ.md`](docs/XAI_UQ.md).
+
+Cell 5 - demo
 ```bash
 !python scripts/12_demo_app.py --selftest      # must end ALL PASS
 !python scripts/12_demo_app.py --share         # open the printed gradio.live link
 ```
 
-The first line should read `detector: learned detector (step 14) | calibration: yes | cases offered (test): 15`.
+The first line should read `detector: learned detector (step 14) | calibration: yes | cases offered (test): 15 | category probabilities (step 16): yes`.
 In the demo: pick a test patient -> the detector suggests nodules -> "Reconstruct in 3D" -> tick
 "show radiologists' ground truth" to compare.
 
@@ -184,6 +192,8 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 14 | `python scripts/14_train_detector.py` | train the nodule detector on the DTS volume (train patients), FROC on test patients; the demo suggests its detections |
 | 13 | `python scripts/13_geometry_sensitivity.py --limit 12` | same nodules with 60 views / a 40 deg sweep: how much the 15-view, 30 deg choice matters |
 | 15 | `python scripts/15_check_fit.py [--gap]` | under/overfitting check of both models from the training logs (`--gap`: final models on train vs held-out data) |
+| 16 | `python scripts/16_uncertainty.py` | conformal predictive systems (`crepes`): intervals (standard / ensemble-normalised / Mondrian size groups), calibrated EUPS volume-category probabilities (< 100 / 100-300 / >= 300 mm3) |
+| 17 | `python scripts/17_explain.py` | explainability: seen / unseen (null-space) split of truth, physics and ours; detector saliency; error drivers ([`docs/XAI_UQ.md`](docs/XAI_UQ.md)) |
 
 ### Why LIDC-IDRI
 
@@ -210,15 +220,17 @@ medlift3d/            library
   detect.py           training-free candidate detector (LoG + Hessian; baseline)
   detector.py         learned nodule detector (3D U-Net heatmap, FROC / CPM evaluation)
   fitcheck.py         training-log parser: under-trained / converged / overfitting verdicts (step 15)
+  uq.py               conformal predictive systems on per-nodule results (crepes; step 16)
+  explain.py          seen / unseen split (CGLS null space), detector saliency, correlations (step 17)
   pipeline.py         end-to-end per-nodule processing (all methods)
   data/               LIDC-IDRI (pylidc + DICOM), LUNA16, cases
   demo.py             demo backend
-scripts/              steps 00-15, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py, archive_results.py,
+scripts/              steps 00-17, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py, archive_results.py,
                       kaggle_run.py (steps 2-8 in one Kaggle session), smoke_test.py
 tests/                pytest unit tests
 configs/              default.yaml (real runs), smoke.yaml (CPU smoke test)
 docs/                 PROPOSAL (method), VERIFY (what each check means), GPU_VASTAI (GPUs, times, costs),
-                      RUNPOD_FULL_RUN (the full rented-GPU run step by step),
+                      RUNPOD_FULL_RUN (the full rented-GPU run step by step), XAI_UQ (steps 16-17),
                       MedLift3D_Project_Guide.docx (the whole project in plain English)
 ```
 

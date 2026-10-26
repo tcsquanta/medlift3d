@@ -31,10 +31,10 @@ first hour.
 | where | what | time (estimate) | cost (estimate) |
 |---|---|---|---|
 | (optional) RunPod **CPU** pod | steps 02-04: choose patients, download the CT (~64 GB), build the cases | 3-5 h | < $2 |
-| RunPod **GPU** pod, 1x L40S | steps 02-07 (if not done on the CPU pod), **08 diffusion training (6 h)**, 14 detector, 09 all methods, 11 growth, 10 tables, 15 fit check, two zips | 16-21 h (12-17 h after the CPU pod) | $18-24 at $1.09/h |
+| RunPod **GPU** pod, 1x L40S | steps 02-07 (if not done on the CPU pod), **08 diffusion training (6 h)**, 14 detector, 09 all methods, 11 growth, 10 tables, 15 fit check, 16 uncertainty, 17 explainability, two zips | 17-22 h (13-18 h after the CPU pod) | $19-25 at $1.09/h |
 | Global volume (persistent storage) | automatic backups + the zips (+ the prepared cases with the CPU pod) | the whole run | < $1 (a few GB to ~30 GB at $0.09/GB per month, prorated) |
 | Google Drive / laptop | the final copy of everything | 0.5-2 h upload | free |
-| Kaggle (free) | step 10 tables again, the demo (step 12) | ~30 min | free |
+| Kaggle (free) | step 10 tables again, 16 uncertainty, 17 explainability, the demo (step 12) | ~1-1.5 h | free |
 
 **Which steps really need the GPU:** 05-09, 11 and 14 run on the GPU (05 would take ~39 h on a CPU).
 Steps 02-04 (selecting, downloading, converting DICOM) only need CPU and network, which is why the optional
@@ -44,7 +44,7 @@ CPU pod (section 3) can do them while you are not paying for the L40S.
 
 ## 1. Before you rent: money
 
-* **$15 is not enough.** One full run on an L40S costs about **$18-24** (16-21 h x $1.09/h + disk). If the
+* **$15 is not enough.** One full run on an L40S costs about **$19-25** (17-22 h x $1.09/h + disk). If the
   balance runs out, RunPod **stops the pod**, and a stopped pod loses its container disk (all data and the
   running training). The backups on the Global volume survive, but the run is interrupted.
 * **Add at least $15-20** (balance ~$30-35) for one run. Make it **about $45** if you might continue training
@@ -178,7 +178,7 @@ tmux new -s ml                          # detach: Ctrl-b d   re-attach: tmux att
 cd /root                                # the container disk: fast; /workspace is only for backups
 git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
 cd medlift3d
-pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest   # torch is preinstalled
+pip install pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly pytest crepes scikit-learn   # torch is preinstalled
 python scripts/00_check_env.py          # must list the L40S and print the projector speed
 python -m pytest -q                     # all tests must pass (~1-3 min)
 ```
@@ -219,7 +219,9 @@ KEEP_DICOM=1 WITH_DATA=1 FULL=/root/to_drive/medlift_everything.zip N_PATIENTS=5
 | 10 | 11 | growth experiment, 20 nodules x 2 follow-ups | 1.5-2.5 h |
 | 11 | 10 | accuracy and interval tables | 1 min |
 | 12 | 15 | under/overfitting check of both models (section 7) | ~5 min |
-| 13 | - | `medlift_kaggle.zip` and `medlift_full_results.zip` in `/workspace` | ~10 min |
+| 13 | 16 | uncertainty: conformal predictive systems, calibrated EUPS volume-category probabilities ([`XAI_UQ.md`](XAI_UQ.md)) | seconds |
+| 14 | 17 | explainability on 30 test nodules (8 members): seen / unseen split, detector saliency, error drivers | 30-60 min |
+| 15 | - | `medlift_kaggle.zip` and `medlift_full_results.zip` in `/workspace` | ~10 min |
 
 After **every** step it copies models, results, outputs and logs to `/workspace/medlift_backup`.
 
@@ -542,7 +544,7 @@ Cell 1 - setup
 ```bash
 !git clone -b claude/funny-hopper-m4j8do https://github.com/tcsquanta/medlift3d.git
 %cd medlift3d
-!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly
+!pip install -q pydicom pylidc sqlalchemy scikit-image pyyaml gradio plotly crepes scikit-learn
 ```
 
 Cell 2 - copy the bundle in (finds it wherever Kaggle put it)
@@ -571,24 +573,35 @@ Cell 4 - fit report (step 15, from the training logs; `--gap` is not possible he
 !python scripts/15_check_fit.py
 ```
 
-Cell 5 - demo (step 12)
+Cell 5 - uncertainty and explainability (steps 16 and 17; what they mean: [`XAI_UQ.md`](XAI_UQ.md))
+```bash
+!python scripts/16_uncertainty.py                # seconds, CPU
+!cat outputs/16_uncertainty/table_uq_*.md
+!python scripts/17_explain.py --limit 12 --members 4 --outputs /kaggle/working/outputs_kaggle   # ~30-50 min on the T4
+!cat /kaggle/working/outputs_kaggle/17_explain/table_*.md
+```
+The bundle already holds step 17 from RunPod (30 nodules, 8 members, in `outputs/17_explain/`); `--outputs`
+keeps the Kaggle run (12 nodules from the 15 bundled test patients) next to it. Short on time:
+`--skip-maps` runs only the error drivers and the detector saliency (minutes).
+
+Cell 6 - demo (step 12)
 ```bash
 !python scripts/12_demo_app.py --selftest      # must end ALL PASS
 !python scripts/12_demo_app.py --share         # open the printed gradio.live link
 ```
 
-The first line should read `detector: learned detector (step 14) | calibration: yes | cases offered (test): 15`.
+The first line should read `detector: learned detector (step 14) | calibration: yes | cases offered (test): 15 | category probabilities (step 16): yes`.
 In the demo: pick a test patient -> the detector suggests nodules -> "Reconstruct in 3D" -> tick "show
 radiologists' ground truth" to compare.
 
-Cell 6 - keep the Kaggle outputs
+Cell 7 - keep the Kaggle outputs
 ```bash
-!zip -qr /kaggle/working/kaggle_outputs.zip outputs
+!zip -qr /kaggle/working/kaggle_outputs.zip outputs /kaggle/working/outputs_kaggle
 ```
 Then download `kaggle_outputs.zip` from the notebook's Output panel.
 
-Send the tables (`table_accuracy.md`, `table_intervals.md`, `table_growth.md`, `table_detection.md`) and
-`outputs/15_fit/fit_report.md` for the report.
+Send the tables (`table_accuracy.md`, `table_intervals.md`, `table_growth.md`, `table_detection.md`,
+`table_uq_*.md`, `17_explain/table_*.md`) and `outputs/15_fit/fit_report.md` for the report.
 
 ---
 
@@ -620,4 +633,4 @@ Send the tables (`table_accuracy.md`, `table_intervals.md`, `table_growth.md`, `
 - [ ] `ALL DONE`; `grep -h "passed,.*failed" logs/*.log` all `ALL PASS`; `cat outputs/15_fit/fit_report.md`
 - [ ] Zips to Google Drive (+ laptop); `rclone check` = 0 differences
 - [ ] Terminate the pod; delete the volume when no retraining is planned
-- [ ] Kaggle: dataset from `medlift_kaggle.zip`, Cells 1-6, send the tables
+- [ ] Kaggle: dataset from `medlift_kaggle.zip`, Cells 1-7, send the tables

@@ -112,7 +112,10 @@ def build_ui(sess: DemoSession, splits=None):
               f"- **Volume:** {num(rep['volume_mm3'])} mm3  [{num(rep['volume_interval'][0])} - {num(rep['volume_interval'][1])}]\n"
               f"- 2D diameter on the DTS slice: {rep['d2d_long_mm']:.1f} mm\n"
               f"- EUPS volume category: {rep['eups_category']}\n"
-              f"- method: {rep['method']}, {rep['n_found']} of {rep['n_members']} hypotheses found a nodule, {rep['seconds']:.1f} s\n"
+              + (f"- **EUPS category, calibrated probability** (step 16): " + " | ".join(
+                  f"{c}: {100 * p:.0f}%" for c, p in rep["category_probs"].items()) + "\n"
+                 if rep.get("category_probs") else "")
+              + f"- method: {rep['method']}, {rep['n_found']} of {rep['n_members']} hypotheses found a nodule, {rep['seconds']:.1f} s\n"
               + (f"- the hypotheses (mass / volume): {hyp}\n" if hyp else "")
               + (f"- **note:** {rep['note']}\n" if rep["note"] else "") + "\n"
               "_Mass is measured directly by every X-ray view; volume needs the depth extent, which DTS cannot see -- "
@@ -268,6 +271,12 @@ def selftest(sess: DemoSession, out_dir: str) -> bool:
              f"V {rep['volume_mm3']:.0f} mm3 [{rep['volume_interval'][0]:.0f}-{rep['volume_interval'][1]:.0f}], "
              f"M {rep['mass_mg']:.0f} mg [{rep['mass_interval'][0]:.0f}-{rep['mass_interval'][1]:.0f}] ({rep['interval_type']})")
     ck.info("method used", rep["method"] + (f" ({rep['note']})" if rep["note"] else ""))
+    if sess.cps is not None:
+        cp = rep.get("category_probs")
+        ck.check("calibrated EUPS category probabilities (step 16) sum to 1" if cp else
+                 "calibrated EUPS category probabilities (step 16)", cp is None or abs(sum(cp.values()) - 1) < 1e-6,
+                 ", ".join(f"{k}: {100 * v:.0f}%" for k, v in cp.items()) if cp else
+                 f"not shown (no step-16 calibration for {rep['method']}, or no nodule was measured)")
     m = sess.mesh()
     ck.check("3D surface mesh", m is not None and len(m[1]) > 0, f"{0 if m is None else len(m[1])} faces")
     t = sess.truth_mesh()
@@ -340,7 +349,8 @@ def main():
     cfg, dev = setup(args)
     sess = DemoSession(cfg, dev, n_members=args.members)
     print(f"method: {sess.method} | detector: {sess.detector_name} | calibration: {'yes' if sess.calib else 'no'} | "
-          f"cases offered ({'/'.join(args.splits)}): {len(sess.available_cases(args.splits))}")
+          f"cases offered ({'/'.join(args.splits)}): {len(sess.available_cases(args.splits))} | "
+          f"category probabilities (step 16): {'yes' if sess.cps else 'no'}")
     if args.selftest:
         import os
 

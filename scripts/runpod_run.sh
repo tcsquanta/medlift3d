@@ -5,7 +5,8 @@
 #   N_PATIENTS=300 TRAIN_HOURS=6 bash scripts/runpod_run.sh
 #
 # Steps 2-7 (data), 8 (diffusion training), 14 (detector), 9 (all methods), 11 (growth),
-# 10 (tables, 1 min), 15 (under/overfitting check of both models, a few min), then
+# 10 (tables, 1 min), 15 (under/overfitting check of both models, a few min), 16 (conformal uncertainty, seconds),
+# 17 (explainability on 30 test nodules, ~30-60 min), then
 #   scripts/make_kaggle_bundle.py -> /workspace/medlift_kaggle.zip        (what Kaggle needs: step 10 + demo)
 #   scripts/archive_results.py    -> /workspace/medlift_full_results.zip  (everything produced: all outputs,
 #                                    logs, results, both models incl. last.pt + training logs, configs;
@@ -136,6 +137,9 @@ step 11_growth   scripts/11_growth_experiment.py --limit "$LIMIT_11" --pairs-per
 backup
 step 10_evaluate scripts/10_evaluate.py              # 1 min; Kaggle can re-run it from the bundle
 step 15_fit scripts/15_check_fit.py --gap || echo "step 15 (fit check) failed: not needed for the results"
+python -c "import crepes" 2>/dev/null || pip install -q crepes scikit-learn || true
+step 16_uq scripts/16_uncertainty.py || echo "step 16 (uncertainty) failed: not needed for the main results"
+step 17_explain scripts/17_explain.py --limit 30 --members 8 || echo "step 17 (explainability) failed: not needed for the main results"
 backup
 
 python scripts/make_kaggle_bundle.py --out "$BUNDLE" --n-demo 15 | tee -a logs/bundle.log

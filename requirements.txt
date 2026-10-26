@@ -9,6 +9,9 @@ pyyaml>=6.0
 pydicom>=2.4
 pylidc==0.2.3            # radiologist annotations (bundled SQLite DB); we patch its NumPy/pkg_resources quirks
 sqlalchemy>=1.4
+# Uncertainty (step 16): conformal predictive systems
+crepes>=0.7
+scikit-learn>=1.2
 # Demo (step 12)
 gradio>=4.0
 plotly>=5.0

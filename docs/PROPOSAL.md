@@ -36,6 +36,12 @@ invisible to it (0.03%).
 * **H2** A learned prior (diffusion) + physics refinement reduces the volume error vs physics-only.
 * **H3** Split-conformal intervals reach their nominal 90% coverage, and mass intervals are narrower than volume intervals.
 * **H4** Mass doubling time (MDT, an established CT biomarker) classifies growth from DTS more accurately than VDT.
+* **H5** (uncertainty, step 16) Conformal predictive distributions give calibrated probabilities of the EUPS
+  volume categories (< 100 / 100-300 / >= 300 mm3) (lower Brier score than the raw ensemble vote) and, with Mondrian size groups, ~90% coverage
+  inside every size group, not only on average.
+* **H6** (explainability, step 17) In the seen / unseen (range / null-space) split of the true CT, the nodule's
+  mass lies in the seen part while a large share of its 3D shape does not (the mechanism behind H1); the diffusion
+  prior's unseen content has positive skill against the truth (it recovers rather than invents).
 
 Any of these can come out false. The report must state whichever results we actually get.
 
@@ -109,9 +115,12 @@ reported as context.
 | Click-to-3D prism ROI reconstruction for DTS with 3D Gaussians + closed-form mass | R2-Gaussian, 3DGR-CT (whole-volume sparse-view CT), no DTS | DTS geometry, prism ROI, Gaussian mass |
 | Conditional diffusion prior with SIRT data consistency inside the prism | DDS / DPS for CT | applied to DTS nodule columns, combined with Gaussians |
 | Calibrated intervals on clinical numbers (mass, volume, doubling time) | conformal CT metrics (2024); 3DGS-CT uncertainty preprint (Jul 2026) shows raw variance is a poor error map | biomarker-level calibration for DTS growth |
+| Conformal predictive distributions -> calibrated EUPS category probabilities and category sets, size-conditional (Mondrian) coverage (step 16) | conformal risk control for nodule *detection* (Hulsman et al. 2025); CPS / `crepes` (Vovk et al.; Bostrom 2022) | decision-level calibrated uncertainty for DTS nodule volumetry |
+| Seen / unseen (null-space) explanation of the measurement, "unseen skill" of the diffusion prior vs the true CT (step 17) | null-space hallucination maps (Bhadra et al., IEEE TMI 2021); range-null-space reconstruction (DDNM; RN-SDEs 2024) | per-nodule evidence that mass is measured and depth shape is not (H1), and a truth-referenced test of what the prior adds, for DTS |
 
 Do **not** claim: "first use of 3DGS in medical imaging", "first uncertainty for 3DGS", "first
-conformal prediction in CT" -- all exist.
+conformal prediction in CT", "first conformal prediction for lung nodules", "first null-space hallucination
+analysis", "new saliency method" -- all exist (details: [`XAI_UQ.md`](XAI_UQ.md)).
 
 ## 5b. First real-data observations (4 LIDC-IDRI patients, 39 nodules, CPU, Oct 21)
 
