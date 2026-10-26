@@ -1,5 +1,8 @@
 # Running MedLift-3D on a rented GPU (Vast.ai) -- what needs a big GPU and how long it takes
 
+> The complete step-by-step RunPod guide (renting -> settings -> run -> under/overfitting check -> saving ->
+> retraining -> Kaggle) is [`RUNPOD_FULL_RUN.md`](RUNPOD_FULL_RUN.md). This file explains the decisions behind it.
+
 ## Which steps need which machine
 
 | step | what | measured on Kaggle 2x T4, 40 patients | RTX 4090, 200 patients (estimate) |
@@ -251,6 +254,10 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh        # inside tmux; af
 | `FULL` | `/workspace/medlift_full_results.zip` | archive of everything produced (`scripts/archive_results.py`) | keep it: all outputs, logs, results, both models incl. `last.pt` |
 | `WITH_DATA` | not set | `WITH_DATA=1` adds the prepared data (~45 GB) to the full archive | only to re-run steps 9-14 elsewhere without re-downloading LIDC |
 | `KEEP_DICOM` | not set | `KEEP_DICOM=1` keeps the downloaded LIDC DICOM (~64 GB) instead of deleting it after step 4 | to save the raw CT to Google Drive (never download from TCIA again) |
+| `JITTER` / `NEGATIVES` | 3 / 2 | step 07 `--jitter` / `--negatives` | more variety against overfitting when retraining (delete `work/roi_pairs` first) |
+| `RETRAIN` | not set | `RETRAIN=run2` keeps the finished model as `work/models/diffusion_before_run2`, moves the old step 9 / 11 results to `work/results/old/` and trains a new model from scratch (re-running with the same name continues it) | the fit check (step 15) says overfitting, or new training pairs |
+| `RETRAIN_DETECTOR`, `DET_STEPS` | not set | the same for the detector; `DET_STEPS` sets its training steps | detector under-trained or peaked early |
+| `ONLY_CASES`, `CASES_TAR` | not set, `/workspace/medlift_cases.tar` | `ONLY_CASES=1` on a CPU pod: steps 02-04 only, packed to `CASES_TAR`; the GPU pod unpacks it and starts at step 05 | saves ~3-5 GPU hours (RUNPOD_FULL_RUN.md section 3) |
 | `MORE_TRAIN_HOURS` | not set | `MORE_TRAIN_HOURS=3` continues a **finished** training from `last.pt` for 3 more hours, then re-runs steps 9, 11, 10 and the zips (old step 9 / 11 results move to `work/results/old/`) | the validation PSNR was still rising at the cap |
 | (re-running) | - | finished steps are skipped (marker files `.done`); an interrupted training continues from `last.pt` automatically (`RESUME=1` is no longer needed) | crash recovery |
 | `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` | always | PyTorch reuses GPU memory more flexibly | fewer out-of-memory crashes |
@@ -293,7 +300,10 @@ Expected on an L40S (estimate): ~0.6-0.9 s/step -> ~24-36k steps in 6 h (~190-29
 
 **Deciding D4 (training hours):** watch the `[val] ... nodule box: sample X dB | condition Y dB` lines
 (every 2,000 steps). Flat for the last few checks -> more hours will not help much. Still rising clearly at
-the cap and time / budget left -> continue training (below), or start with `TRAIN_HOURS=8`.
+the cap and time / budget left -> continue training (below), or start with `TRAIN_HOURS=8`. The `[fit]` lines
+below them (denoising loss on 32 training vs 32 held-out pairs at fixed noise) show overfitting: held-out
+rising while training falls. `python scripts/15_check_fit.py` turns both into a verdict
+([RUNPOD_FULL_RUN.md, section 7](RUNPOD_FULL_RUN.md#7-is-the-model-under--or-overfitting)).
 
 ### Continuing training after the time cap
 

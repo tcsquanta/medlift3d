@@ -33,6 +33,9 @@ python scripts/smoke_test.py --fresh     # every step end-to-end on synthetic ph
 
 ## Full run: rented GPU (RunPod) for the heavy steps, Kaggle for the rest
 
+**Complete step-by-step guide (renting, settings, the run, under/overfitting, saving, retraining, Kaggle):
+[`docs/RUNPOD_FULL_RUN.md`](docs/RUNPOD_FULL_RUN.md).** Below is the short version.
+
 | where | steps | why |
 |---|---|---|
 | **RunPod** (L40S 48 GB, ~$1.09/h) | 02-08 data + diffusion training, 14 detector, 09 all methods, 11 growth (+ 10) | need a big GPU and the full 583-patient data (~45 GB) |
@@ -69,7 +72,7 @@ N_PATIENTS=583 TRAIN_HOURS=6 bash scripts/runpod_run.sh
 
 [`scripts/runpod_run.sh`](scripts/runpod_run.sh) runs steps 02-04 (and deletes the 64 GB of DICOM once the
 cases are built), 05-07, 08 (diffusion training, stops itself after `TRAIN_HOURS`), 14, 09 (150 nodules),
-11 (20 nodules x 2 follow-ups) and 10; one log per step in `logs/`; after every step a copy of models,
+11 (20 nodules x 2 follow-ups), 10 and 15 (fit check); one log per step in `logs/`; after every step a copy of models,
 results, outputs and logs in `/workspace/medlift_backup`; at the end two zips:
 
 | file | contents | size | for |
@@ -91,6 +94,9 @@ time with `python scripts/archive_results.py --out /workspace/medlift_full_resul
 - The pod itself was lost: new pod with the same Global volume, restore with
   `mkdir -p work && cp -r /workspace/medlift_backup/work/. work/`, then the same command (the data steps
   02-07 run again, training / detector / measured nodules are taken from the backup).
+- Under- or overfitting? `python scripts/15_check_fit.py` (also runs at the end; report in
+  `outputs/15_fit/fit_report.md`). Retraining from scratch: `RETRAIN=run2 bash scripts/runpod_run.sh`
+  (see the full guide, section 9).
 - Validation PSNR still rising at the 6 h cap: `MORE_TRAIN_HOURS=3 bash scripts/runpod_run.sh` continues
   training for 3 h and re-runs steps 9, 11, 10 with the new model (details: `docs/GPU_VASTAI.md`,
   "Continuing training after the time cap").
@@ -130,7 +136,8 @@ S=$(find /kaggle/input -name splits.json -path "*work*" | head -1)
 if [ -z "$S" ]; then                       # Kaggle kept the zip packed
   Z=$(find /kaggle/input -name "*.zip" | head -1); unzip -q "$Z" -d .
 else
-  B=$(dirname "$(dirname "$S")"); rm -rf work outputs; cp -r "$B/work" work; cp -r "$B/outputs" outputs
+  B=$(dirname "$(dirname "$S")"); rm -rf work outputs logs
+  cp -r "$B/work" work; cp -r "$B/outputs" outputs; [ -d "$B/logs" ] && cp -r "$B/logs" logs
 fi
 ls work/models/diffusion work/models/detector; ls work/cases | wc -l
 ```
@@ -176,6 +183,7 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 12 | `python scripts/12_demo_app.py --share` | interactive click-to-3D demo (Gradio) |
 | 14 | `python scripts/14_train_detector.py` | train the nodule detector on the DTS volume (train patients), FROC on test patients; the demo suggests its detections |
 | 13 | `python scripts/13_geometry_sensitivity.py --limit 12` | same nodules with 60 views / a 40 deg sweep: how much the 15-view, 30 deg choice matters |
+| 15 | `python scripts/15_check_fit.py [--gap]` | under/overfitting check of both models from the training logs (`--gap`: final models on train vs held-out data) |
 
 ### Why LIDC-IDRI
 
@@ -201,14 +209,16 @@ medlift3d/            library
   growth.py           virtual growth, VDT/MDT, NELSON categories
   detect.py           training-free candidate detector (LoG + Hessian; baseline)
   detector.py         learned nodule detector (3D U-Net heatmap, FROC / CPM evaluation)
+  fitcheck.py         training-log parser: under-trained / converged / overfitting verdicts (step 15)
   pipeline.py         end-to-end per-nodule processing (all methods)
   data/               LIDC-IDRI (pylidc + DICOM), LUNA16, cases
   demo.py             demo backend
-scripts/              steps 00-14, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py, archive_results.py,
+scripts/              steps 00-15, runpod_run.sh (all rented-GPU steps), make_kaggle_bundle.py, archive_results.py,
                       kaggle_run.py (steps 2-8 in one Kaggle session), smoke_test.py
 tests/                pytest unit tests
 configs/              default.yaml (real runs), smoke.yaml (CPU smoke test)
 docs/                 PROPOSAL (method), VERIFY (what each check means), GPU_VASTAI (GPUs, times, costs),
+                      RUNPOD_FULL_RUN (the full rented-GPU run step by step),
                       MedLift3D_Project_Guide.docx (the whole project in plain English)
 ```
 

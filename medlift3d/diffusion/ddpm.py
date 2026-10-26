@@ -57,10 +57,14 @@ class GaussianDiffusion:
         a = self._a(t, x0.device)
         return a.sqrt() * x0 + (1 - a).sqrt() * noise
 
-    def loss(self, model: nn.Module, x0: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+    def loss(self, model: nn.Module, x0: torch.Tensor, cond: torch.Tensor,
+             t: Optional[torch.Tensor] = None, noise: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Training loss at random noise levels; fixed ``t`` / ``noise`` give a repeatable value (fit checks)."""
         b = x0.shape[0]
-        t = torch.randint(0, self.T, (b,), device=x0.device)
-        noise = torch.randn_like(x0)
+        if t is None:
+            t = torch.randint(0, self.T, (b,), device=x0.device)
+        if noise is None:
+            noise = torch.randn_like(x0)
         xt = self.q_sample(x0, t, noise)
         out = model(torch.cat([xt, cond], dim=1), t)
         if self.prediction == "v":

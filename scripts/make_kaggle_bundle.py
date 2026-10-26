@@ -2,7 +2,8 @@
 """Pack what Kaggle needs after the rented-GPU run into one zip (step 10, report, demo).
 
 Contents: both trained models, splits.json, work/results (per-nodule results of steps 9 / 11,
-detections), outputs/ (all tables, figures, PASS/FAIL reports) and the cases / DTS / coarse SIRT
+detections), outputs/ (all tables, figures, PASS/FAIL reports), logs/ (step logs: step 15 can re-read
+the training curves) and the cases / DTS / coarse SIRT
 files of ``--n-demo`` test patients for the demo. The big data (all cases, DICOM) stays behind.
 
     python scripts/make_kaggle_bundle.py --out /workspace/medlift_kaggle.zip --n-demo 15
@@ -29,6 +30,7 @@ def main():
     for f in [f"{w}/splits.json", f"{w}/models/diffusion/best.pt", f"{w}/models/detector/best.pt"]:
         (files if os.path.exists(f) else missing).append(f)
     files += [f for f in glob.glob(f"{w}/results/*") if os.path.isfile(f)]
+    files += sorted(glob.glob("logs/*.log"))
     files += [f for f in glob.glob(f"{args.outputs}/**/*", recursive=True) if os.path.isfile(f)
               and not f.startswith(f"{args.outputs}/12_demo/roi_")]          # skip the demo's click images
     test = []

@@ -76,6 +76,9 @@ moves), `phantom_dts_sirt.png` (coronal = sharp nodule, sagittal = depth smear),
 * First: `--tiny` sanity run (CPU, ~7 min) must PASS both checks (loss falls; samples beat the blurred condition).
 * Real run: PASS loss decreased; **PASS "diffusion samples beat the physics-only condition"** is the
   key check of the trained model. Figures `val_step*.png` show condition / sample / CT side by side.
+* Every check also prints `[fit] denoising loss ... train pairs A | held-out pairs B`: the same 32 training
+  and 32 held-out pairs with the same noise every time. Both falling = still learning; B rising while A
+  falls = overfitting (step 15 judges this).
 
 ## Step 9 - all methods (`09_run_pipeline.py`)
 * PASS: all nodules processed. INFO lines give median volume / mass error per method.
@@ -148,6 +151,14 @@ dose) and runs the physics-only methods on the same nodules.
 * Figures `<case>_n<j>_roi_sirt.png` (the same nodule's ROI-SIRT per geometry next to the CT) and
   `<case>_n<j>_spread.png` (the nodule alone, reconstructed per geometry).
 * Diffusion is not run here (trained on the 15x30 geometry only).
+
+## Step 15 - under/overfitting check (`15_check_fit.py`)
+* Reads `logs/08_train.log` and `logs/14_detector.log`; writes `outputs/15_fit/fit_report.md` (verdict per
+  model: STILL IMPROVING / CONVERGED / OVERFITTING / NOT LEARNING, the reason and what to do) and
+  `fit_curves.png` (training loss and validation curves, where `best.pt` was taken).
+* `--gap`: the final `best.pt` models on training vs held-out data. Healthy: diffusion held-out / train
+  denoising loss < 1.15; detector train CPM - cal CPM < 0.15.
+* How to act on it: [`RUNPOD_FULL_RUN.md`, sections 7 and 9](RUNPOD_FULL_RUN.md#7-is-the-model-under--or-overfitting).
 
 ## Smoke test (`smoke_test.py`)
 Runs steps 0-12 on synthetic phantoms with tiny settings (CPU, ~45 min on 4 cores) and prints one table.

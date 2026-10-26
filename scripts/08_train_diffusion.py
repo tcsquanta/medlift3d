@@ -117,6 +117,36 @@ def evaluate(model, diffusion, val_items, steps, device, gen_seed=0, start_frac=
     return float(np.mean(ps_s)), float(np.mean(ps_c)), vis, box
 
 
+FIT_LEVELS = (0.1, 0.3, 0.5, 0.7, 0.9)                   # noise levels of the fit check (fraction of all)
+
+
+def evenly(items, n):
+    """Up to n items spread evenly over the list (all patients represented, same picks every time)."""
+    return [items[i] for i in sorted(set(np.linspace(0, len(items) - 1, min(n, len(items))).astype(int)))] if items else []
+
+
+@torch.no_grad()
+def fixed_noise_loss(model, diffusion, items, device, dtype, batch=4, seed=1234):
+    """Denoising loss of (cond, target) pairs at fixed noise levels with fixed noise: comparable between
+    checks and between training and held-out pairs -- the over/underfitting curve of a diffusion model."""
+    if not items:
+        return float("nan")
+    model.eval()
+    jobs = [(c, x, int(f * diffusion.T)) for c, x in items for f in FIT_LEVELS]
+    total = 0.0
+    for i in range(0, len(jobs), batch):
+        ch = jobs[i:i + batch]
+        cond = torch.stack([c for c, _, _ in ch]).to(device)
+        x0 = torch.stack([x for _, x, _ in ch]).to(device)
+        t = torch.tensor([t for _, _, t in ch], device=device)
+        noise = torch.stack([torch.randn(x.shape, generator=torch.Generator().manual_seed(seed + i + k))
+                             for k, (_, x, _) in enumerate(ch)]).to(device)
+        with torch.autocast(device_type=device.type, dtype=dtype, enabled=dtype is not None):
+            total += float(diffusion.loss(model, x0, cond, t=t, noise=noise)) * len(ch)
+    model.train()
+    return total / len(jobs)
+
+
 def main():
     ap = base_parser(__doc__)
     ap.add_argument("--steps", type=int, default=None)
@@ -127,6 +157,7 @@ def main():
     ap.add_argument("--log-every", type=int, default=50)
     ap.add_argument("--sample-every", type=int, default=2000)
     ap.add_argument("--n-val", type=int, default=4)
+    ap.add_argument("--n-fit", type=int, default=32, help="training / held-out pairs for the fixed-noise fit check")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--max-hours", type=float, default=None,
                     help="stop after this many hours of training (evaluates + saves first); the learning rate "
@@ -161,6 +192,7 @@ def main():
         bs = args.batch_size or 4
         train_ds = TinyDataset(tiny_pairs(6, 32, seed=0))
         val_items = [train_ds[i] for i in range(2)]
+        fit_train, fit_val = [train_ds[i] for i in range(len(train_ds))], []
         args.sample_every = min(args.sample_every, steps)
         sample_steps = 25
     else:
@@ -172,6 +204,9 @@ def main():
         src = RoiPairDataset(val_ds.files if val_ds is not None else train_ds.files, augment=False, return_meta=True)
         idx = np.linspace(0, len(src) - 1, min(args.n_val, len(src))).astype(int)
         val_items = [src[i] for i in idx]
+        fit_sets = [RoiPairDataset(evenly(d.files, args.n_fit), augment=False) if d is not None else []
+                    for d in (train_ds, val_ds)]                  # fixed pairs, not flipped: same every check
+        fit_train, fit_val = ([d[i] for i in range(len(d))] for d in fit_sets)
         sample_steps = int(dcfg["sample_steps"])
     lr = args.lr or float(dcfg["lr"])
     model = build_model(dcfg).to(dev)
@@ -236,13 +271,20 @@ def main():
                         persistent_workers=False)
     it = infinite(loader, sampler)
     log_path = os.path.join(mdir, "train_log.csv")
+    header = ["step", "loss", "lr", "sec_per_step", "val_psnr_sample", "val_psnr_condition",
+              "val_box_sample", "val_box_condition", "fit_loss_train", "fit_loss_heldout"]
     new_log = not (args.resume and os.path.exists(log_path))
+    if not new_log and main_proc:
+        with open(log_path) as f:
+            if f.readline().strip() != ",".join(header):          # log of an older version: keep it aside
+                os.replace(log_path, log_path.replace(".csv", "_old.csv"))
+                new_log = True
     logf = open(log_path if main_proc else os.devnull, "w" if new_log else "a", newline="")
     logw = csv.writer(logf)
     if new_log:
-        logw.writerow(["step", "loss", "lr", "sec_per_step", "val_psnr_sample", "val_psnr_condition"])
+        logw.writerow(header)
     warmup = float(max(1, min(500, steps // 10)))
-    losses, hist_s, hist_c, hist_bs, hist_bc = [], [], [], [], []
+    losses, hist_s, hist_c, hist_bs, hist_bc, hist_ft, hist_fv = [], [], [], [], [], [], []
     vsp = np.asarray(cfg["roi"]["voxel_mm"], float)[::-1]                              # (z, y, x)
     box_half = None if args.tiny else (np.asarray(cfg["roi"].get("box_mm", (40, 50, 40)), float)[::-1] / vsp / 2.0)
     best = resumed_best if resumed_best is not None else -1e9      # resuming must not forget the best model so far
@@ -274,7 +316,7 @@ def main():
                 eta_h = max(0.0, args.max_hours - (time.perf_counter() - t_start) / 3600)
             print(f"step {step}/{steps}  loss {ml:.4f}  lr {cur_lr:.2e}  {dt:.3f}s/step  "
                   f"{'time left' if args.max_hours is not None else 'ETA'} {eta_h:.2f} h")
-            logw.writerow([step, ml, cur_lr, dt, "", ""])
+            logw.writerow([step, ml, cur_lr, dt] + [""] * 6)
             logf.flush()
         out_of_time = args.max_hours is not None and time.perf_counter() - t_start >= 3600.0 * args.max_hours
         if world > 1 and args.max_hours is not None:     # all GPUs must stop at the same step
@@ -290,10 +332,16 @@ def main():
             hist_c.append(pc)
             hist_bs.append(bxs)
             hist_bc.append(bxc)
-            logw.writerow([step, "", "", "", ps, pc])
+            ft = fixed_noise_loss(ema.shadow, diffusion, fit_train, dev, dtype)
+            fv = fixed_noise_loss(ema.shadow, diffusion, fit_val, dev, dtype)
+            hist_ft.append(ft)
+            hist_fv.append(fv)
+            logw.writerow([step, "", "", "", ps, pc, bxs, bxc, ft, fv])
             logf.flush()
             print(f"  [val] PSNR sample vs CT {ps:.2f} dB | condition vs CT {pc:.2f} dB"
                   + (f"  || nodule box: sample {bxs:.2f} dB | condition {bxc:.2f} dB" if np.isfinite(bxs) else ""))
+            print(f"  [fit] denoising loss at fixed noise (EMA model): train pairs {ft:.4f}"
+                  + (f" | held-out pairs {fv:.4f}  (held-out / train {fv / ft:.2f})" if np.isfinite(fv) else ""))
             c_hu, s_hu, t_hu = vis[0]
             from medlift3d.geometry import VolumeGeometry
 
@@ -330,6 +378,9 @@ def main():
         else:
             ck.check("diffusion samples beat the physics-only condition on validation ROIs (PSNR)",
                      hist_s[-1] > hist_c[-1], f"{hist_s[-1]:.2f} dB vs {hist_c[-1]:.2f} dB")
+    if hist_ft:
+        ck.info("fit check: denoising loss train / held-out pairs at the last check",
+                f"{hist_ft[-1]:.4f} / {hist_fv[-1]:.4f}  (python scripts/15_check_fit.py explains the trend)")
     ck.info("checkpoints", mdir)
     ck.finish(out)
 
