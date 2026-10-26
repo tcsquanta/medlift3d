@@ -154,6 +154,18 @@ cases are skipped).
 On the GPU pod (section 5) use the same `N_PATIENTS`; the script prints
 `unpacking the cases prepared on the CPU pod` and continues at step 05.
 
+**Volume rules (RunPod):**
+* A volume can only be attached **when the pod is deployed**, not later. Add the Global volume on the
+  Deploy page of *both* pods.
+* Only **one running pod** should use the volume at a time: **terminate the CPU pod before deploying the GPU
+  pod**.
+* Check on both pods that the volume really is at `/workspace` before starting: `df -h /workspace` (if a
+  network volume is also attached, RunPod moves the Global volume to `/workspace-global`; then add
+  `CASES_TAR=/workspace-global/medlift_cases.tar` in front of the command on both pods).
+
+**Which steps can run on the CPU pod?** Only 02-04. Steps 05-07 also could, but far too slowly (step 05
+alone ~39 h on a CPU vs ~20 min on the L40S), and steps 08, 14, 09 and 11 are GPU training / sampling.
+
 ---
 
 ## 4. Set up the GPU pod
