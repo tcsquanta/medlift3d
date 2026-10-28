@@ -140,6 +140,7 @@ step 15_fit scripts/15_check_fit.py --gap || echo "step 15 (fit check) failed: n
 python -c "import crepes" 2>/dev/null || pip install -q crepes scikit-learn || true
 step 16_uq scripts/16_uncertainty.py || echo "step 16 (uncertainty) failed: not needed for the main results"
 step 17_explain scripts/17_explain.py --limit 30 --members 8 || echo "step 17 (explainability) failed: not needed for the main results"
+python scripts/18_report.py | tee -a logs/18_report.log || true          # outputs/report.html: every result on one page
 backup
 
 python scripts/make_kaggle_bundle.py --out "$BUNDLE" --n-demo 15 | tee -a logs/bundle.log

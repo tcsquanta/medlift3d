@@ -194,6 +194,7 @@ only some cases, e.g. `python scripts/06_reconstruct_sirt.py --cases LIDC-IDRI-0
 | 15 | `python scripts/15_check_fit.py [--gap]` | under/overfitting check of both models from the training logs (`--gap`: final models on train vs held-out data) |
 | 16 | `python scripts/16_uncertainty.py` | conformal predictive systems (`crepes`): intervals (standard / ensemble-normalised / Mondrian size groups), calibrated EUPS volume-category probabilities (< 100 / 100-300 / >= 300 mm3) |
 | 17 | `python scripts/17_explain.py` | explainability: seen / unseen (null-space) split of truth, physics and ours; detector saliency; error drivers ([`docs/XAI_UQ.md`](docs/XAI_UQ.md)) |
+| 18 | `python scripts/18_report.py [--outputs <folder>]` | **one HTML page with every table, figure and check** (`outputs/report.html`; plain Python, also on an unzipped results folder) |
 
 ### Why LIDC-IDRI
 

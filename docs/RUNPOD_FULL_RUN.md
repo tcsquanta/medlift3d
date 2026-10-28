@@ -584,6 +584,11 @@ The bundle already holds step 17 from RunPod (30 nodules, 8 members, in `outputs
 keeps the Kaggle run (12 nodules from the 15 bundled test patients) next to it. Short on time:
 `--skip-maps` runs only the error drivers and the detector saliency (minutes).
 
+Cell 5b - all results on one page (step 18, seconds)
+```bash
+!python scripts/18_report.py        # -> outputs/report.html: download it (file browser, right-click) and open in any browser
+```
+
 Cell 6 - demo (step 12)
 ```bash
 !python scripts/12_demo_app.py --selftest      # must end ALL PASS
