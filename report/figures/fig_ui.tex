@@ -1,0 +1,53 @@
+% User interface wireframe of the click-to-3D demo (Gradio)
+\begin{tikzpicture}[font=\footnotesize,
+    ctl/.style={draw=edge, fill=white, rounded corners=2pt, minimum height=0.55cm, anchor=west, inner xsep=4pt, font=\scriptsize},
+    call/.style={circle, fill=accent, text=white, font=\scriptsize\bfseries, inner sep=1pt, minimum size=0.42cm}]
+  % browser frame
+  \draw[edge, fill=physics, rounded corners=4pt] (0,0) rectangle (16,10.2);
+  \fill[edge!20, rounded corners=4pt] (0,9.6) rectangle (16,10.2);
+  \foreach \x/\c in {0.3/red!60, 0.6/orange!70, 0.9/green!50!black} { \fill[\c] (\x,9.9) circle (0.08); }
+  \node[anchor=west, font=\footnotesize\bfseries] at (1.3,9.9) {MedLift-3D: click-to-3D lung nodule assessment};
+  % left panel
+  \node[ctl] at (0.4,9.0) {Case: LIDC-IDRI-0018 $\blacktriangledown$};
+  \node[ctl] at (3.9,9.0) {Method: diffusion + GS $\blacktriangledown$};
+  \node[call] at (7.75,9.0) {1};
+  \fill[black!75] (0.4,2.1) rectangle (7.4,8.4);
+  \fill[black!15] (2.25,5.25) ellipse (1.25 and 2.4);
+  \fill[black!15] (5.55,5.25) ellipse (1.25 and 2.4);
+  \foreach \p in {(1.9,6.6),(5.0,4.0),(2.6,3.6),(6.0,6.9)} { \draw[orange!90!black, thick] \p circle (0.17); }
+  \draw[green!60!black, thick] (5.7,6.2) circle (0.26);
+  \draw[accent, very thick] (5.7,5.85) -- ++(0,0.7) (5.35,6.2) -- ++(0.7,0);
+  \node[call] at (7.75,7.9) {2};
+  \node[anchor=north west, font=\scriptsize, text=white] at (0.5,8.35) {coronal DTS slice};
+  \node[anchor=south west, font=\scriptsize, text=white, align=left] at (0.5,2.15) {\textcolor{orange!80}{$\circ$} suggestion \quad \textcolor{green!70}{$\circ$} annotated \quad \textcolor{accentlight}{$+$} click};
+  \draw[edge, thick] (0.6,1.4) -- (7.2,1.4);
+  \fill[accent] (4.4,1.4) circle (0.13);
+  \node[anchor=west, font=\scriptsize] at (0.5,0.85) {depth (slice) slider};
+  \node[call] at (7.75,1.4) {3};
+  % right panel: report
+  \draw[edge, fill=white, rounded corners=3pt] (8.3,5.0) rectangle (15.6,9.3);
+  \node[anchor=north west, font=\footnotesize\bfseries] at (8.45,9.2) {Measurement report};
+  \node[anchor=north west, align=left, font=\scriptsize] at (8.45,8.7)
+     {Mass $M$ [mg] with 90\% interval $[\ell, u]$\\[1pt]
+      Volume $V$ [mm$^3$] with 90\% interval $[\ell, u]$\\[1pt]
+      2D long-axis diameter [mm]\\[1pt]
+      hypotheses that found the nodule: $k$ of 8};
+  \node[anchor=west, font=\scriptsize\bfseries] at (8.45,6.55) {EUPS category probability};
+  \foreach \i/\h/\t in {0/0.35/{$<$100}, 1/0.95/{100--300}, 2/0.45/{$\geq$300}} {
+    \fill[accent!70] ({8.7+1.25*\i},5.35) rectangle ++(0.7,\h);
+    \node[font=\scriptsize] at ({9.05+1.25*\i},5.15) {\t};
+  }
+  \node[draw=orange!90!black, text=orange!80!black, font=\scriptsize\bfseries, rounded corners=2pt] at (14.3,5.9) {low-confidence flag};
+  \node[call] at (15.85,9.0) {4};
+  % 3D view and prism strip
+  \draw[edge, fill=white, rounded corners=3pt] (8.3,1.9) rectangle (11.8,4.7);
+  \node[anchor=north west, font=\scriptsize\bfseries] at (8.4,4.65) {3D view};
+  \shade[ball color=accent!60, opacity=0.8] (10.05,3.15) ellipse (0.9 and 0.6);
+  \draw[edge, fill=white, rounded corners=3pt] (12.1,1.9) rectangle (15.6,4.7);
+  \node[anchor=north west, font=\scriptsize\bfseries, text width=3.2cm] at (12.15,4.65) {prism: input + 8 samples};
+  \foreach \i in {0,...,3} { \foreach \j in {0,1} { \fill[black!\the\numexpr 40+10*\i\relax] ({12.3+0.8*\i},{2.1+1.0*\j}) rectangle ++(0.7,0.85); } }
+  \node[call] at (15.85,3.3) {5};
+  % follow-up button
+  \node[draw=accent, fill=accent, text=white, rounded corners=3pt, minimum width=7.0cm, minimum height=0.7cm, font=\scriptsize\bfseries] at (11.8,1.0) {Virtual follow-up (180 days): VDT, MDT};
+  \node[call] at (15.85,1.0) {6};
+\end{tikzpicture}

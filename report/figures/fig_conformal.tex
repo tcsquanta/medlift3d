@@ -1,0 +1,30 @@
+% Split-conformal calibration on held-out patients and its use on a new nodule
+\begin{tikzpicture}[font=\footnotesize, >=Stealth]
+  % (a) calibration scores
+  \begin{scope}
+    \node[anchor=north west, font=\small\bfseries] at (-0.2,3.55) {(a)};
+    \node[anchor=north west, text width=6.8cm] at (0.45,3.55) {calibration scores on 117 held-out patients:\\ $s_i = |\log(V_i/\hat V_i)|\,/\,\hat\sigma_i$};
+    \draw[->, edge] (0,0) -- (7.2,0) node[right] {$s$};
+    \foreach \x/\h in {0.3/1.2,0.7/1.9,1.1/2.5,1.5/2.3,1.9/1.8,2.3/1.4,2.7/1.0,3.1/0.75,3.5/0.55,3.9/0.4,4.3/0.3,4.7/0.22,5.1/0.15,5.5/0.1,5.9/0.07} {
+      \fill[accent!35] (\x-0.18,0) rectangle (\x+0.18,\h);
+    }
+    \draw[red!70!black, very thick] (4.05,-0.1) -- (4.05,2.4);
+    \node[red!70!black, align=left, anchor=west] at (4.15,2.0) {$\hat q$: the $\lceil (n{+}1)(1{-}\alpha)\rceil$-th\\ smallest score};
+    \node[text=quiet] at (2.0,-0.35) {90\% of scores};
+    \draw[<->, quiet] (0.1,-0.6) -- (4.0,-0.6);
+  \end{scope}
+  % (b) test interval
+  \begin{scope}[xshift=8.6cm]
+    \node[anchor=north west, font=\small\bfseries] at (-0.2,3.55) {(b)};
+    \node[anchor=north west, text width=6.5cm] at (0.45,3.55) {new nodule: prediction $\hat V$,\\ ensemble spread $\hat\sigma$};
+    \draw[->, edge] (0,1.2) -- (6.8,1.2) node[right] {$\log V$};
+    \fill[accent!20] (1.4,0.9) rectangle (5.2,1.5);
+    \draw[accent, very thick] (1.4,0.85) -- (1.4,1.55) (5.2,0.85) -- (5.2,1.55);
+    \fill[accent] (3.3,1.2) circle (0.09);
+    \node[below=5pt] at (3.3,1.05) {$\hat V$};
+    \node[above=3pt] at (1.4,1.55) {$\ell = \hat V e^{-\hat q\hat\sigma}$};
+    \node[above=3pt] at (5.2,1.55) {$u = \hat V e^{+\hat q\hat\sigma}$};
+    \node[align=center, text=quiet] at (3.3,-0.35) {$P(V \in [\ell,u]) \geq 1-\alpha = 0.9$\\ for exchangeable patients};
+  \end{scope}
+  \draw[->, thick, edge] (7.3,1.6) -- (8.4,1.6);
+\end{tikzpicture}

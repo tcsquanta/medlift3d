@@ -1,0 +1,128 @@
+% MedLift-3D method overview (research-style pipeline figure)
+\begin{tikzpicture}[font=\footnotesize, >=Stealth,
+    arr/.style={->, thick, edge},
+    lbl/.style={align=center, font=\scriptsize, text width=3.1cm},
+    stage/.style={font=\footnotesize\bfseries, text=accent},
+    grp/.style={draw=edge!50, dashed, rounded corners=4pt, inner sep=6pt}]
+
+  % cuboid: \cub{x}{y}{w}{h}{d}{fill}
+  \newcommand{\cub}[6]{%
+    \draw[edge, fill=#6] (#1,#2) rectangle ++(#3,#4);
+    \draw[edge, fill=#6!70!white] (#1,#2+#4) -- ++(#5,0.55*#5) -- ++(#3,0) -- ++(-#5,-0.55*#5) -- cycle;
+    \draw[edge, fill=#6!80!black] (#1+#3,#2) -- ++(#5,0.55*#5) -- ++(0,#4) -- ++(-#5,-0.55*#5) -- cycle;}
+
+  % =================== row 1: acquisition and reconstruction (physics)
+  \begin{scope}[on background layer]
+    \fill[physics, rounded corners=4pt] (-0.3,4.35) rectangle (16.45,8.55);
+  \end{scope}
+  \node[anchor=north west, font=\small\bfseries, text=edge] at (-0.2,8.5) {A\quad Acquisition and reconstruction (physics)};
+
+  % (1) projections: stack of views
+  \foreach \i/\g in {3/55,2/45,1/35,0/25} {
+    \draw[edge, fill=black!\g] ({0.25+0.16*\i},{5.15+0.16*\i}) rectangle ++(1.7,1.7);
+  }
+  \draw[white!80!black, thick] (0.6,6.0) ellipse (0.28 and 0.5);
+  \draw[white!80!black, thick] (1.55,6.0) ellipse (0.28 and 0.5);
+  \node[stage] at (1.35,7.75) {1};
+  \node[lbl] at (1.35,4.75) {15 low-dose views\\ $\pm15^\circ$, $I_0{=}2{\times}10^4$};
+
+  \draw[arr] (2.75,6.0) -- (3.35,6.0);
+
+  % (2) whole-chest SIRT volume
+  \cub{3.5}{5.15}{1.9}{1.7}{0.9}{white}
+  \draw[accent, thick, fill=accent, fill opacity=0.15] (3.95,5.15) -- ++(0.9*0.55,0.55*0.9*0.55) -- ++(0,1.7) -- ++(-0.9*0.55,-0.55*0.9*0.55) -- cycle;
+  \node[stage] at (4.75,7.75) {2};
+  \node[lbl] at (4.75,4.75) {whole-chest SIRT\\ 2.5 mm voxels};
+
+  \draw[arr] (6.45,6.0) -- (7.05,6.0);
+
+  % (3) coronal slice + detector suggestions + click
+  \draw[edge, fill=black!30] (7.2,5.15) rectangle ++(1.9,1.7);
+  \draw[black!8, fill=black!8] (7.72,6.0) ellipse (0.36 and 0.62);
+  \draw[black!8, fill=black!8] (8.58,6.0) ellipse (0.36 and 0.62);
+  \foreach \p in {(7.6,6.35),(8.75,5.7),(7.85,5.55)} { \draw[orange!90!black, thick] \p circle (0.09); }
+  \fill[accent] (8.5,6.3) circle (0.07);
+  \draw[accent, thick] (8.5,6.05) -- ++(0,0.5) (8.25,6.3) -- ++(0.5,0);
+  \node[stage] at (8.15,7.75) {3};
+  \node[lbl] at (8.15,4.75) {detector suggests (\textcolor{orange!90!black}{$\circ$})\\ clinician clicks (\textcolor{accent}{$+$})};
+
+  \draw[arr] (9.35,6.0) -- (9.95,6.0);
+
+  % (4) prism through the chest
+  \draw[edge] (10.15,5.15) rectangle ++(1.9,1.7);
+  \draw[edge] (10.15,6.85) -- ++(1.2,0.66) -- ++(1.9,0) -- (12.05,6.85);
+  \draw[edge] (13.25,7.51) -- ++(0,-1.7) -- (12.05,5.15);
+  \draw[edge, densely dashed] (11.35,5.81) -- ++(1.9,0) (11.35,5.81) -- ++(0,1.7) (11.35,5.81) -- (10.15,5.15);
+  \cub{10.85}{5.72}{0.5}{0.5}{1.2}{accentlight}
+  \node[stage] at (11.45,7.75) {4};
+  \node[lbl] at (11.45,4.75) {64 mm prism through\\ the chest ($64{\times}128{\times}64$)};
+
+  % rows link
+  \draw[arr, rounded corners=6pt] (13.5,6.0) -- (14.6,6.0) -- (14.6,4.05) -- (0.45,4.05) -- (0.45,2.05);
+  \node[font=\scriptsize, fill=white, inner sep=1.5pt] at (8.0,4.05) {condition $\mathbf{c}$ = prism SIRT of the DTS};
+
+  % =================== row 2: learned prior | measurement and uncertainty
+  \begin{scope}[on background layer]
+    \fill[learned, rounded corners=4pt] (-0.3,-0.75) rectangle (6.3,3.75);
+    \fill[measure, rounded corners=4pt] (6.6,-0.75) rectangle (16.45,3.75);
+  \end{scope}
+  \node[anchor=north west, font=\small\bfseries, text=edge] at (0.8,3.7) {B\quad Learned prior};
+  \node[anchor=north west, font=\small\bfseries, text=edge] at (6.7,3.7) {C\quad Measurement and calibrated uncertainty};
+
+  % (5) conditional 3D U-Net
+  \draw[edge, fill=accentlight] (1.25,0.75) -- (2.25,1.15) -- (2.25,2.05) -- (1.25,2.45) -- cycle;
+  \draw[edge, fill=accent!45] (2.4,1.2) rectangle (2.9,2.0);
+  \draw[edge, fill=accentlight] (3.05,1.15) -- (4.05,0.75) -- (4.05,2.45) -- (3.05,2.05) -- cycle;
+  \draw[edge, dashed, ->] (1.75,2.35) to[bend left=30] (3.55,2.35);
+  \node[font=\scriptsize, text=quiet] at (2.65,2.82) {skip connections};
+  \node[align=center] at (0.45,1.6) {$\mathbf{x}_t$\\ $\oplus\,\mathbf{c}$};
+  \draw[arr] (0.8,1.6) -- (1.2,1.6);
+  \draw[arr] (4.1,1.6) -- (4.5,1.6);
+  \node at (4.85,1.6) {$\hat{\mathbf{v}}_\theta$};
+  \node[draw=accent, fill=white, rounded corners=2pt, font=\scriptsize\bfseries, text=accent] at (4.85,2.2) {$\times 8$};
+  \draw[arr, accent, rounded corners=5pt] (4.85,1.3) -- (4.85,0.4) -- (0.45,0.4) -- (0.45,1.15);
+  \node[font=\scriptsize, fill=learned, inner sep=1pt, text=accent!80!black] at (2.65,0.4) {DDIM step + SIRT data consistency};
+  \node[stage] at (5.6,3.0) {5};
+  \node[lbl, text width=5cm] at (2.65,-0.25) {conditional 3D diffusion U-Net\\ (17.4\,M parameters)};
+
+  \draw[arr] (5.2,1.6) -- (6.95,1.6);
+
+  % (6) 3D Gaussians
+  \draw[edge, fill=white] (7.0,0.6) rectangle ++(2.0,2.0);
+  \foreach \cx/\cy/\rx/\ry/\r in {7.8/1.65/0.42/0.22/30, 8.15/1.35/0.35/0.18/-20, 8.0/1.85/0.25/0.15/70, 8.4/1.75/0.22/0.12/10} {
+    \fill[accent, opacity=0.35, rotate around={\r:(\cx,\cy)}] (\cx,\cy) ellipse (\rx cm and \ry cm);
+  }
+  \node[stage] at (8.0,3.0) {6};
+  \node[lbl, text width=2.4cm] at (8.0,0.0) {3D Gaussians\\ closed-form mass};
+
+  \draw[arr] (9.05,1.6) -- (9.45,1.6);
+
+  % (7) measurements
+  \node[draw=edge, fill=white, rounded corners=3pt, align=left, text width=1.75cm, minimum height=2.0cm, font=\scriptsize] at (10.45,1.6)
+    {mass $M$\\[2pt] volume $V$\\[2pt] diameter $d$\\[2pt] spread $\sigma$};
+  \node[stage] at (10.45,3.0) {7};
+  \node[lbl, text width=2.2cm] at (10.45,0.0) {8 measurements\\ per nodule};
+
+  \draw[arr] (11.5,1.6) -- (11.9,1.6);
+
+  % (8) conformal predictive distribution
+  \begin{scope}[shift={(12.05,0.6)}]
+    \draw[->, edge] (0,0) -- (2.1,0) node[right, font=\scriptsize] {$V$};
+    \draw[->, edge] (0,0) -- (0,2.0) node[left, font=\scriptsize] {$F$};
+    \fill[accent, opacity=0.15] (0.55,0) rectangle (1.45,1.85);
+    \draw[accent, very thick, domain=0:1.95, samples=60, smooth] plot (\x, {1.8/(1+exp(-6*(\x-1.0)))});
+    \draw[edge, densely dashed] (0.55,0) -- (0.55,1.85) (1.45,0) -- (1.45,1.85);
+    \node[font=\scriptsize] at (0.55,-0.2) {$\ell$};
+    \node[font=\scriptsize] at (1.45,-0.2) {$u$};
+  \end{scope}
+  \node[stage] at (13.1,3.0) {8};
+  \node[lbl, text width=3.2cm] at (13.1,0.0) {conformal predictive\\ distribution};
+
+  \draw[arr] (14.4,1.6) -- (14.65,1.6);
+
+  % (9) report
+  \draw[edge, fill=white] (14.7,0.5) -- ++(1.65,0) -- ++(0,1.9) -- ++(-0.3,0.3) -- ++(-1.35,0) -- cycle;
+  \node[align=left, font=\scriptsize] at (15.5,1.5) {$M\ [\ell,u]$\\ $V\ [\ell,u]$\\ $P(\mathrm{cat.})$\\ seen/unseen};
+  \node[stage] at (15.5,3.0) {9};
+  \node[lbl, text width=1.8cm] at (15.5,0.0) {report};
+\end{tikzpicture}

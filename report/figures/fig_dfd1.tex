@@ -1,0 +1,38 @@
+% Data flow diagram level 1, Gane--Sarson notation
+\begin{tikzpicture}[process/.append style={font=\scriptsize, text width=2.75cm, minimum width=2.95cm}, mainproc/.append style={font=\scriptsize, text width=2.75cm, minimum width=2.95cm}]
+  \def\cA{0}\def\cB{4.2}\def\cC{8.4}\def\cD{12.6}\def\cE{16.8}
+  \def\rTop{4.9}\def\rMid{2.45}\def\rBot{0}
+  % offline row
+  \node[entity, minimum width=2.6cm] (tcia) at (\cA,\rTop) {TCIA archive\\ (LIDC-IDRI)};
+  \node[process] (p1) at (\cB,\rTop) {\textbf{1.0}\\ Build cases, consensus masks, split};
+  \node[process] (p2) at (\cC,\rTop) {\textbf{2.0}\\ Simulate DTS and SIRT};
+  \node[process] (p3) at (\cD,\rTop) {\textbf{3.0}\\ Train prior and detector};
+  \node[process] (p4) at (\cE,\rTop) {\textbf{4.0}\\ Calibrate on cal.\ patients};
+  % stores
+  \datastore{d1}{(\cB,\rMid)}{D1}{Cases}
+  \datastore{d2}{(\cC,\rMid)}{D2}{DTS + SIRT}
+  \datastore{d3}{(\cD,\rMid)}{D3}{Models}
+  \datastore{d4}{(\cE,\rMid)}{D4}{Calibration}
+  % per-click row
+  \node[entity, minimum width=2.6cm] (clin) at (\cA,\rBot) {Clinician};
+  \node[process] (p5) at (\cB,\rBot) {\textbf{5.0}\\ Suggest candidates, select nodule};
+  \node[process] (p6) at (\cC,\rBot) {\textbf{6.0}\\ Reconstruct prism};
+  \node[mainproc] (p7) at (\cD,\rBot) {\textbf{7.0}\\ Sample prior, fit Gaussians};
+  \node[process] (p8) at (\cE,\rBot) {\textbf{8.0}\\ Measure, calibrate, explain};
+
+  \foreach \a/\b/\t in {tcia/p1/{CT}, p1/p2/{cases}, p2/p3/{pairs}, p3/p4/{models}} {
+    \draw[flow] (\a) -- node[flowlbl, above=2pt] {\t} (\b);
+  }
+  \foreach \a/\b/\t in {clin/p5/{click}, p5/p6/{position}, p6/p7/{prism}, p7/p8/{samples}} {
+    \draw[flow] (\a) -- node[flowlbl, below=2pt] {\t} (\b);
+  }
+  \foreach \p/\d/\t in {p1/d1/{cases}, p2/d2/{projections}, p3/d3/{weights}, p4/d4/{residuals}} {
+    \draw[flow] (\p) -- node[flowlbl, right=1pt] {\t} (\d);
+  }
+  \foreach \d/\p/\t in {d1/p5/{case}, d2/p6/{DTS of case}, d3/p7/{prior weights}, d4/p8/{calibration}} {
+    \draw[flow] (\d) -- node[flowlbl, right=1pt] {\t} (\p);
+  }
+  \draw[flow, rounded corners=5pt] (p8.south) -- ++(0,-0.65) -| node[flowlbl, pos=0.25, below] {report: mass and volume with 90\% intervals, category probabilities, seen/unseen split} (clin.south);
+  \node[font=\scriptsize\itshape, text=quiet, anchor=west] at (-1.3,6.0) {offline, once};
+  \node[font=\scriptsize\itshape, text=quiet, anchor=west] at (-1.3,1.1) {per click};
+\end{tikzpicture}

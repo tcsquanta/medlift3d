@@ -1,0 +1,263 @@
+\chapter{Project Design}
+\label{ch:design}
+
+This chapter turns the problem into requirements, models the system with context, data flow and decomposition diagrams, and explains the method together with the alternatives we rejected. It ends with the project plan and task allocation.
+
+\section{Requirement Analysis}
+
+\paragraph{Requirements elicitation.} Requirements were gathered from four sources: (i) the clinical guidelines that radiologists follow for nodules, namely the EUPS volume categories and the NELSON doubling-time categories~\cite{oudkerk2017eups,horeweg2014nelson}; (ii) meetings with our supervisor; (iii) the published limits of DTS and sparse-view reconstruction (\cref{ch:background}); and (iv) the constraints of a student project: public data only, no clinical scanner, a budget of tens of dollars and a fixed deadline. \Cref{tab:stakeholders} lists the stakeholders and their needs.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Stakeholders and their needs.}
+\label{tab:stakeholders}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Stakeholder & Need & How MedLift-3D answers it \\
+\midrule
+Radiologist & A 3D size and growth rate from a low-dose exam, and to know when not to trust it & Mass, volume, category and doubling time, each with a calibrated interval and a low-confidence flag \\
+Patient & Less radiation and cost per follow-up & DTS at about 0.1~mSv instead of CT \\
+Low-resource hospital & Affordable equipment and software & DTS hardware; software runs on a free or US\$1/hour GPU \\
+Examiner / researcher & Claims that can be checked & Every step ends in PASS/FAIL checks; test patients never used for tuning \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Requirements analysis and negotiation.} Several requirements conflict; \cref{tab:conflicts} records how each conflict was resolved.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Conflicting requirements and their resolution.}
+\label{tab:conflicts}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Conflict & Decision & Rationale \\
+\midrule
+Low dose vs accuracy & Simulate $I_0 = 2\times10^4$ photons per pixel and view (about 1/20--1/40 of clinical DTS dose) & Conservative: a method that works at this dose works at clinical dose \\
+Clinical view count (60--74) vs compute & 15 views at equal total dose & Measured: the view count barely changes depth smear at equal dose (5.13 vs 5.34) \\
+Fill the missing wedge vs never invent anatomy & Diffusion prior with X-ray data consistency, plus seen/unseen explanation & Every hypothesis agrees with the X-rays; what the prior adds is shown and tested \\
+Single number vs honest uncertainty & Eight hypotheses + conformal calibration & Raw spread is not calibrated; conformal intervals have a coverage guarantee \\
+Whole-volume accuracy vs GPU memory & Reconstruct only a 64~mm prism through the chest at the click & Keeps each ray's full path (a small box gave 73\% error) at $64{\times}128{\times}64$ voxels \\
+Automatic detection vs false positives & The detector only suggests; the clinician clicks & The clinician stays in control; missed nodules can still be measured \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Functional and Nonfunctional Requirements}
+
+Each requirement has a measurable acceptance criterion and the pipeline step that checks it (\cref{tab:fr,tab:nfr}); \cref{ch:results} reports the result for every row.
+
+{\small
+\begin{longtable}{>{\raggedright\arraybackslash}p{1.1cm} >{\raggedright\arraybackslash}p{6.2cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}p{1.6cm}}
+\caption{Functional requirements.}\label{tab:fr}\\
+\toprule
+ID & Requirement & Acceptance criterion & Checked by \\
+\midrule
+\endfirsthead
+\toprule
+ID & Requirement & Acceptance criterion & Checked by \\
+\midrule
+\endhead
+FR-01 & Load LIDC-IDRI CT and radiologist annotations; build a consensus mask ($\geq$50\% of readers); split by patient into train/cal/test & DICOM and pylidc slice positions agree; splits disjoint & Steps 02--04 \\
+FR-02 & Simulate low-dose DTS: 15 views, $\pm15^\circ$, SID 1800~mm, 43~cm panel, Poisson noise & Detector integral equals object mass within 0.1\% in every view & Steps 01, 05 \\
+FR-03 & Reconstruct the whole chest with SIRT, confined in depth to the patient & Residual below 0.9 of its start; missing wedge visible (depth/in-plane $>1.3$) & Step 06 \\
+FR-04 & Suggest nodule candidates with a learned 3D detector & Test CPM higher than a training-free baseline & Step 14 \\
+FR-05 & Reconstruct a 64~mm prism around a click & Prism keeps the column's attenuation (ratio $\approx 1$) & Step 07 \\
+FR-06 & Generate eight X-ray-consistent CT hypotheses with the diffusion prior & Nodule-box PSNR of samples above the physics-only input on held-out pairs & Steps 08, 15 \\
+FR-07 & Fit 3D Gaussians; measure mass, volume, 2D diameter and EUPS category & Finite values; failures reported, not hidden & Step 09 \\
+FR-08 & Calibrate 90\% intervals and category probabilities & Test coverage $90\pm3\%$; Brier score below the raw ensemble vote & Steps 10, 16 \\
+FR-09 & Measure growth on virtual follow-ups (VDT, MDT, NELSON categories) & Doubling-time error and category accuracy reported & Step 11 \\
+FR-10 & Explain each result: seen/unseen split, detector saliency, error drivers & Tables and figures produced on test nodules & Step 17 \\
+FR-11 & Interactive click-to-3D application and HTML report of all results & Demo self-test passes; report lists every check & Steps 12, 18 \\
+\bottomrule
+\end{longtable}
+}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Nonfunctional requirements.}
+\label{tab:nfr}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+ID & Requirement & Acceptance criterion \\
+\midrule
+NFR-01 Performance & One click gives a result quickly & $\leq 60$~s per nodule on one GPU \\
+NFR-02 Cost & The full study is affordable for students & $\leq$ US\$50 of rented GPU \\
+NFR-03 Reproducibility & Same input, same output; checkable steps & Fixed seed, one configuration file, PASS/FAIL checks, unit tests \\
+NFR-04 Validity & No optimistic bias & Test patients unused for training or tuning; simulation and reconstruction on different grids \\
+NFR-05 Safety & Never report a bare number & Every number has an interval; low-confidence flag when fewer than half of the hypotheses find the nodule or the spread exceeds $10\times$ \\
+NFR-06 Usability & Usable by a clinician without coding & Browser interface, one click per nodule \\
+NFR-07 Portability & Runs on common hardware & CPU smoke test; GPU with $\geq 24$~GB for training \\
+NFR-08 Privacy & No identifiable patient data & Only de-identified public TCIA data \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Context Diagram}
+
+The context diagram (\cref{fig:context}) shows MedLift-3D as a single process with its external entities. At run time the clinician is the only actor; the TCIA archive and the cloud GPU provider are needed to build and evaluate the models.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.92\linewidth}{!}{\input{figures/fig_context}}
+  \caption{Context diagram (DFD level 0) in Gane--Sarson notation.}
+  \label{fig:context}
+\end{figure}
+
+\subsection{Data Flow Diagram Level 1}
+
+The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and four data stores. The upper row runs once to build the cases, train the models and calibrate them; the lower row runs for every click and reads all four stores. \Cref{tab:dict} is the data dictionary and \cref{fig:fdd} the functional decomposition.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_dfd1}}
+  \caption{Data flow diagram level 1 (offline processes 1.0--4.0, per-click processes 5.0--8.0, data stores D1--D4).}
+  \label{fig:dfd1}
+\end{figure}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Data dictionary.}
+\label{tab:dict}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.1cm} >{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.8cm}}
+\toprule
+Store / item & Format & Contents & Constraint \\
+\midrule
+D1 Case & int16 + packed bits + JSON header & CT in HU, consensus and four reader masks per nodule, voxel geometry, patient ID & HU in $[-1024, 3071]$ \\
+Projections & float, $15{\times}536{\times}536$ & Noisy line integrals per view & Finite, max $<15$ \\
+D2 SIRT volume & float, 2.5~mm voxels & Whole-chest DTS reconstruction & Patient depth + 5~mm \\
+Prism & float, $64{\times}128{\times}64$, $1{\times}2{\times}1$~mm & Column through the chest at the click & Rays $\geq$50\% inside \\
+Training pair & float16 & Condition (DTS prism) and target (CT prism) in HU & Train patients only \\
+D3 Diffusion model & PyTorch checkpoint & 17.42~M parameters, EMA weights & Selected on held-out train pairs \\
+D3 Detector & PyTorch checkpoint & 0.34~M parameters, heatmap 3D U-Net & Selected on cal.\ patients \\
+Gaussians & float32 & Centres ($N{\times}3$), scales ($N{\times}3$), quaternions ($N{\times}4$), amplitudes ($N$) & $N \leq \num{30000}$ \\
+Result row & JSON lines & Per nodule and method: volume, mass, log-spread, members, ground truth & One row per nodule \\
+D4 Calibration & JSON & Per method: residuals, spreads, $\sigma$ floor & Cal.\ patients only \\
+Report & JSON / UI & Mass and volume with intervals, category probabilities, diameter, low-confidence flag, run time & Interval type stated \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_fdd}}
+  \caption{Functional decomposition diagram: five subsystems and their functions.}
+  \label{fig:fdd}
+\end{figure}
+
+\subsection{UI Design}
+
+The interface is a browser application built around one action: click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice with detector suggestions, annotated nodules (for evaluation) and the click; (3) the depth slider, which supplies the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up that reports VDT and MDT.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_ui}}
+  \caption{User interface design of the click-to-3D application.}
+  \label{fig:ui}
+\end{figure}
+
+\section{Detailed Methodology and Design}
+\label{sec:method}
+
+\Cref{fig:pipeline} gives an overview of the method; the stages are described below.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_pipeline}}
+  \caption[MedLift-3D method overview]{MedLift-3D method overview. (A) Physics: low-dose DTS is simulated, reconstructed and cut to a prism around the click. (B) A conditional 3D diffusion prior generates eight hypotheses of the prism, each kept consistent with the X-rays. (C) Gaussians give closed-form mass; the eight measurements are calibrated into intervals and category probabilities.}
+  \label{fig:pipeline}
+\end{figure}
+
+\paragraph{Stage 0: what DTS can measure.} Let $f(x,y,z)$ be the nodule's excess attenuation, with $y$ the depth axis, and let the view at tube angle $\theta$ project along a direction tilted by $\theta$ from $y$ in the $y$--$z$ plane, with detector coordinates $(x, v)$ and $v$ along $\mathbf{e}_\theta = (0, -\sin\theta, \cos\theta)$. The moments of the projection $p_\theta$ are
+\begin{align}
+  \iint p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= M, \label{eq:m0}\\
+  \iint v\, p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= -\sin\theta\, M y_c + \cos\theta\, M z_c, \label{eq:m1}\\
+  \iint (v-\bar v)^2 p_\theta\,\mathrm{d}x\,\mathrm{d}v &= \sin^2\theta\, S_{yy} - 2\sin\theta\cos\theta\, S_{yz} + \cos^2\theta\, S_{zz}, \label{eq:m2}
+\end{align}
+where $M$ is the mass, $(y_c,z_c)$ the centroid and $S$ the second central moments (for a cone beam, \cref{eq:m0} holds up to a known magnification factor). Every view gives the mass directly (\cref{eq:m0}). The depth position enters only through $\sin\theta \leq \sin 15^\circ$, making it $1/\sin15^\circ \approx 3.9$ times worse conditioned than in-plane position, and the depth extent $S_{yy}$, which volume needs, enters through $\sin^2\theta$, about $1/\sin^2 15^\circ \approx 15$ times worse. Step~01 confirms this numerically: the detector integral matched the mass to 0.03\% in all 15 views, and an object three times deeper with equal mass gave the same integrals.
+
+\paragraph{Stage 1: simulated low-dose DTS.} The CT table is removed, then 15 views over $\pm15^\circ$ are simulated at CT resolution with 0.5~mm ray sampling, SID 1800~mm, a 43~cm flat panel with 0.8~mm pixels, monochromatic attenuation and Poisson noise at $I_0 = 2\times10^4$. The geometry matches the GE VolumeRAD sweep; reconstruction uses different grids than simulation to avoid the inverse crime.
+
+\paragraph{Stage 2: whole-chest SIRT with depth support.} SIRT (40 iterations, 2.5~mm voxels) is confined in depth to the patient (body outline + 5~mm). Without this support the reconstruction placed attenuation in the air in front of and behind the patient, and on real chests the prism lost about a third of its attenuation; with it the prism keeps 98.7\%.
+
+\paragraph{Stage 3: learned detector.} A small 3D U-Net~\cite{cicek2016unet} (0.34~M parameters) predicts a nodule heatmap from the SIRT volume, and its peaks are offered as suggestions. A Laplacian-of-Gaussian and Hessian blob detector is the training-free baseline.
+
+\paragraph{Stage 4: prism ROI.} Around the click, a $64\times64$~mm column through the whole chest ($64\times128\times64$ voxels at $1\times2\times1$~mm) is reconstructed by SIRT using only rays that carry at least 50\% of their attenuation inside the prism; the rest of the chest is subtracted using the coarse reconstruction. Depth is kept whole because each ray's attenuation is spread along its full path: a small 3D box around the nodule gave a 73\% error against 5--7\% for the prism.
+
+\paragraph{Stage 5: conditional 3D diffusion prior.} A 3D U-Net (\cref{fig:unet}; base 32 channels, multipliers 1/2/4/4, two residual blocks per level, attention at the lowest level, 17.42~M parameters) learns $p(\text{CT prism}\mid\text{DTS prism})$ with v-prediction, a cosine schedule over 1000 steps, EMA weights and bf16 mixed precision. Sampling uses 50 DDIM steps; from 60\% of the way through, every denoised estimate $\hat{\mathbf{x}}_0$ receives two SIRT data-consistency iterations,
+\begin{equation}
+  \hat{\mathbf{x}}_0 \leftarrow \hat{\mathbf{x}}_0 + \lambda\, C A^{\top} R\,(\mathbf{b} - A\hat{\mathbf{x}}_0),
+\end{equation}
+before the next DDIM step. Eight samples give eight hypotheses that agree with the X-rays but differ where the X-rays are blind.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\linewidth}{!}{\input{figures/fig_unet}}
+  \caption[Conditional 3D U-Net of the diffusion prior]{Conditional 3D U-Net of the diffusion prior. The noisy prism $\mathbf{x}_t$ is concatenated with the DTS condition $\mathbf{c}$; the timestep embedding is added in every residual block; the network predicts the velocity $\hat{\mathbf{v}}_\theta$.}
+  \label{fig:unet}
+\end{figure}
+
+\paragraph{Stage 6: 3D Gaussians and measurement.} For each hypothesis the nodule box ($40\times50\times40$~mm) is fitted with anisotropic Gaussians (100 fitting and 100 refinement iterations against the measured projections, the rest of the prism fixed). A seeded half-maximum segmentation, confined to a plausible nodule extent, gives the volume; \cref{eq:gaussmass} gives the mass; and the long-axis 2D diameter is kept as the clinical baseline.
+
+\paragraph{Stage 7: uncertainty.} The eight hypotheses give a log-scale spread $\hat\sigma$. On the calibration patients this spread is calibrated with (a) split-conformal asymmetric intervals (step~10) and (b) normalised and Mondrian conformal predictive systems with crepes (step~16), which give full predictive distributions, EUPS category probabilities and category sets.
+
+\paragraph{Stage 8: growth.} Each nodule is grown in the CT by a known factor, its projections are updated and fresh noise added; VDT and MDT are measured and assigned to the NELSON categories.
+
+\paragraph{Stage 9: explanation.} The true CT prism is split into seen and unseen parts by conjugate-gradient least squares (CGLS)~\cite{hestenes1952cg} on the prism projection operator. We measure how much of the nodule's mass and shape lies in each part and the prior's \emph{unseen skill}, the correlation of its unseen content with the truth's (\cref{fig:seen}). Input$\times$gradient saliency explains the detector, and rank correlations relate the measurement error to nodule size, depth and contrast.
+
+\paragraph{Alternatives considered.} \Cref{tab:alternatives} lists the alternatives and why they were rejected. The first design of this project, explored in the earlier FYDP phases, generated whole $512^3$ volumes with a latent diffusion model; it is included in the table because its lessons shaped the final design: a large generator judged by training losses could not show whether a single nodule measurement was right, so FYDP-III narrowed the goal to clinical numbers that can be verified.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Alternative solutions and the rationale for the selected design.}
+\label{tab:alternatives}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.6cm}}
+\toprule
+Alternative & Why rejected & Selected instead \\
+\midrule
+FBP or SIRT alone & Cannot fill the missing wedge; physics-only volume errors of 80--90\% on small nodules & SIRT as input and data-consistency step, plus a learned prior \\
+Neural radiance fields~\cite{mildenhall2020nerf} & Slow per-patient optimisation, implicit geometry, no prior for unseen depth & Explicit 3D Gaussians with closed-form mass \\
+Whole-volume latent diffusion at $512^3$ (earlier FYDP design) & Too large to train and verify in time and budget; evaluated by generative losses, not clinical numbers & Small conditional prior on a prism, judged by calibrated measurements \\
+Small 3D box ROI & Each ray's attenuation lies mostly outside the box: 73\% error vs 5--7\% & Prism through the whole chest \\
+GAN prior & Training instability; one output per input & Diffusion: stable training, many hypotheses \\
+Unconditional prior with posterior sampling only & Slower and weaker for a strongly ill-posed \ang{30} problem & Conditional model + SIRT data consistency \\
+Raw ensemble variance or MC dropout & Not calibrated; no coverage guarantee & Ensemble spread calibrated by conformal prediction \\
+Volume-only reporting & Volume depends on the poorly measured depth & Mass first, volume second, both with intervals \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Project Plan}
+
+The FYDP-III work was organised in three overlapping streams over the trimester (\cref{fig:gantt}): analysis and design, implementation of the 18-step pipeline, and verification with a full study. Implementation tasks were ordered so that every component could be tested on synthetic phantoms before real data arrived, and real-data pilots on 4 and 40 patients preceded the full 583-patient run.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_gantt}}
+  \caption{FYDP-III schedule by week. \fillme{adjust the week numbers to your trimester dates}}
+  \label{fig:gantt}
+\end{figure}
+
+\section{Task Allocation}
+
+\Cref{tab:tasks} gives the responsibilities of each team member in FYDP-III. \fillme{confirm or correct the allocation}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Task allocation matrix.}
+\label{tab:tasks}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X}
+\toprule
+Team member & Role & Responsibilities \\
+\midrule
+Jubair Ahmed (011222136) & Lead AI architect & Projection-moment analysis; diffusion prior design and training (step 08); fit check (15); conformal uncertainty (10, 16) \\
+Foyez Ahammed Naeem (011222011) & Systems engineer & Cloud infrastructure (RunPod CPU and GPU pods, Kaggle); data pipeline (02--07); detector training (14); full run and backups \\
+Md Motasim Billah (011222016) & Full-stack developer & Click-to-3D application (12); evaluation tables and figures (10, 11); explainability (17); HTML report (18) \\
+All members & -- & Literature review, verification of every PASS/FAIL step, report writing, presentation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Summary}
+
+The requirements were elicited from guidelines, the supervisor and published limits, negotiated where they conflicted, and specified with measurable acceptance criteria. The design measures mass first, reconstructs a prism around the click, fills depth with a data-consistent diffusion prior, measures with Gaussians, and calibrates and explains every number. \Cref{ch:results} verifies each requirement.

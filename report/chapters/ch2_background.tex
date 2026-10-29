@@ -1,0 +1,152 @@
+\chapter{Background}
+\label{ch:background}
+
+This chapter gives the background needed for the rest of the report and reviews existing applications and research. It ends with the gap that MedLift-3D addresses.
+
+\section{Preliminaries}
+
+\paragraph{X-ray projection and attenuation.} A detector pixel records the line integral of the linear attenuation coefficient $\mu$ along the ray from the source. With $I_0$ incident photons the expected count is
+\begin{equation}
+  \bar I = I_0 \exp\Big(-\int_{\text{ray}} \mu(\mathbf{r})\, \mathrm{d}l\Big), \qquad I \sim \mathrm{Poisson}(\bar I),
+\end{equation}
+so fewer photons (lower dose) mean more noise. CT values are expressed in Hounsfield units, $\mathrm{HU} = 1000\,(\mu-\mu_{\text{water}})/\mu_{\text{water}}$.
+
+\paragraph{Digital tomosynthesis and the missing wedge.} CT collects projections over \ang{180} or more. Chest DTS moves the tube along a short linear track, typically $\pm15^\circ$ (GE VolumeRAD) to $\pm20^\circ$ (Shimadzu SonialVision), with 15--74 views~\cite{dobbins2003dts}. By the Fourier slice theorem each view measures one plane of the object's 3D Fourier transform, so a narrow sweep leaves a wedge of depth frequencies unmeasured (\cref{fig:dts}b). Reconstructions are sharp in the coronal plane but every structure is smeared in depth.
+
+\paragraph{Iterative reconstruction (SIRT).} Writing the projection operator as $A$, the measured line integrals as $\mathbf{b}$ and the volume as $\mathbf{x}$, SIRT~\cite{gilbert1972sirt,herman2009} solves $A\mathbf{x}\approx\mathbf{b}$ by repeated normalised back-projection of the residual:
+\begin{equation}
+  \mathbf{x}^{(k+1)} = \mathbf{x}^{(k)} + \lambda\, C A^{\top} R \big(\mathbf{b} - A\mathbf{x}^{(k)}\big),
+\end{equation}
+where $R$ and $C$ hold the inverse row and column sums of $A$. It is stable under noise but cannot recover anything that lies in the null space of $A$.
+
+\paragraph{Seen and unseen parts.} Any volume splits uniquely as $\mathbf{x} = \mathbf{x}_{\text{seen}} + \mathbf{x}_{\text{unseen}}$ with $\mathbf{x}_{\text{seen}} \in \mathcal{R}(A^{\top})$ and $\mathbf{x}_{\text{unseen}} \in \mathcal{N}(A)$, i.e.\ $A\mathbf{x}_{\text{unseen}}=0$. The X-rays determine only the seen part; the unseen part of any reconstruction comes from its prior~\cite{bhadra2021,wang2023ddnm}. \Cref{fig:seen} illustrates this.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.82\linewidth}{!}{\input{figures/fig_seen_unseen}}
+  \caption[Seen and unseen components of a reconstruction]{Seen (range) and unseen (null-space) components. All volumes on the vertical line agree with the measured views. SIRT returns the minimum-norm point with no unseen content; diffusion samples supply unseen content, which we test against the true CT (unseen skill, \cref{sec:method}).}
+  \label{fig:seen}
+\end{figure}
+
+\paragraph{Denoising diffusion models.} A diffusion model learns to reverse a gradual noising process~\cite{ho2020ddpm}. With a cosine noise schedule $\bar\alpha_t$~\cite{nichol2021improved}, a noisy sample is
+\begin{equation}
+  \mathbf{x}_t = \sqrt{\bar\alpha_t}\,\mathbf{x}_0 + \sqrt{1-\bar\alpha_t}\,\boldsymbol\epsilon, \qquad \boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},I).
+\end{equation}
+We train the network to predict the velocity $\mathbf{v} = \sqrt{\bar\alpha_t}\,\boldsymbol\epsilon - \sqrt{1-\bar\alpha_t}\,\mathbf{x}_0$ (v-prediction~\cite{salimans2022v}), minimising
+\begin{equation}
+  \mathcal{L}(\theta) = \mathbb{E}_{\mathbf{x}_0,\mathbf{c},t,\boldsymbol\epsilon}\, \big\| \mathbf{v} - \hat{\mathbf{v}}_\theta(\mathbf{x}_t, \mathbf{c}, t)\big\|_2^2 ,
+\end{equation}
+where the condition $\mathbf{c}$ is the DTS reconstruction, so the model learns $p(\mathbf{x}_0\mid\mathbf{c})$. DDIM~\cite{song2021ddim} samples in tens of steps instead of a thousand, and data-consistency (DC) sampling corrects every denoised estimate with the physics so that samples agree with the measurements~\cite{chung2023dps,chung2024dds}.
+
+\paragraph{3D Gaussian representations.} A volume can be written as a sum of anisotropic Gaussians with centres $\boldsymbol\mu_i$, covariances $\Sigma_i = R_i S_i S_i^{\top} R_i^{\top}$ and amplitudes $a_i$~\cite{kerbl2023gs,zha2024r2}:
+\begin{equation}
+  f(\mathbf{r}) = \sum_i a_i \exp\!\Big(-\tfrac12(\mathbf{r}-\boldsymbol\mu_i)^{\top}\Sigma_i^{-1}(\mathbf{r}-\boldsymbol\mu_i)\Big),
+  \qquad
+  M = \int f = \sum_i a_i (2\pi)^{3/2} s_{i1}s_{i2}s_{i3},
+  \label{eq:gaussmass}
+\end{equation}
+where $s_{i1},s_{i2},s_{i3}$ are the Gaussian's standard deviations. The mass is therefore closed form, and the field can be evaluated on any grid.
+
+\paragraph{Nodule mass.} In this report mass is the nodule's excess attenuation over the surrounding lung, converted to milligrams with the CT density scale (about 0.7--0.85~mg/mm$^3$ on LIDC nodules). Mass doubling time is computed like VDT but from mass; it detects growth of part-solid nodules earlier~\cite{dehoop2010}.
+
+\paragraph{Conformal prediction.} Split conformal prediction~\cite{vovk2022alrw,angelopoulos2023} turns any predictor into intervals with a finite-sample guarantee: if calibration and test cases are exchangeable, a $(1-\alpha)$ interval contains the truth with probability at least $1-\alpha$. A \emph{normalised} version scales each interval by a difficulty estimate (here the spread of the diffusion hypotheses); a \emph{Mondrian} version calibrates within groups (here nodule size groups) so that coverage holds in every group; and \emph{conformal predictive systems} (CPS) return a full calibrated cumulative distribution for each case~\cite{vovk2019cps,bostrom2022crepes}, from which calibrated probabilities such as $P(V\geq 300~\text{mm}^3)$ follow. \Cref{fig:conformal} shows the procedure.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_conformal}}
+  \caption[Split-conformal calibration]{Split-conformal calibration (schematic). (a) Normalised scores on held-out calibration patients and their $(1-\alpha)$ quantile $\hat q$. (b) The interval for a new nodule, valid for exchangeable patients without any assumption on the error distribution.}
+  \label{fig:conformal}
+\end{figure}
+
+\paragraph{Explainability and detection metrics.} Input$\times$gradient saliency~\cite{shrikumar2017} multiplies each input voxel by the gradient of the output with respect to it, showing which voxels drove a detector's score. Detection is measured by the Competition Performance Metric (CPM), the mean sensitivity at 1/8, 1/4, 1/2, 1, 2, 4 and 8 false positives per scan~\cite{setio2017luna}.
+
+\section{Literature Review}
+
+\subsection{Similar Applications}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Applications similar to MedLift-3D.}
+\label{tab:similar}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Application & What it does & What it lacks for our problem \\
+\midrule
+Chest DTS units (GE VolumeRAD, Shimadzu SonialVision) & Acquire and reconstruct DTS slices for reading & No 3D nodule measurement; depth smear left to the reader \\
+CT nodule volumetry software (vendor lung packages, AI nodule tools) & Detect and segment nodules on CT, report volume and VDT & Requires CT at every follow-up; no DTS support \\
+CT computer-aided detection (LUNA16-style)~\cite{setio2017luna} & Suggest nodule locations on CT & Detection only; no measurement or uncertainty \\
+3D Slicer, ITK-SNAP & Viewing and manual segmentation & No learned prior, no calibrated numbers \\
+Research sparse-view reconstruction codes (R$^2$-Gaussian, 3DGR-CT)~\cite{zha2024r2,li2025gr} & Reconstruct whole volumes from few views & CT geometry, image metrics only, no clinical numbers \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Related Research}
+
+\paragraph{Radiation and screening.} Mascalchi and Sali~\cite{mascalchi2017} reviewed the cumulative dose of low-dose CT screening (9.3--13.0~mSv over ten years) and argued for ALARA and ultra-low-dose methods; Rampinelli et al.~\cite{rampinelli2017} estimated the cancer risk from screening and follow-up CT.
+
+\paragraph{3D measurement of nodules.} Lee~\cite{lee2025volumetry} and de Margerie-Mellon et al.~\cite{demargerie2018} showed that volumetry is more reproducible than diameters but varies between software, and Revel et al.~\cite{revel2004twod} showed that 2D measurements of small nodules are unreliable. NELSON~\cite{horeweg2014nelson} and the European position statement~\cite{oudkerk2017eups} define the volume and VDT categories we use. De Hoop et al.~\cite{dehoop2010} showed that mass detects growth of ground-glass nodules earlier than volume or diameter.
+
+\paragraph{Chest DTS.} Vikgren et al.~\cite{vikgren2008} found that DTS detected about three times more nodules than chest radiography, and Dobbins and Godfrey~\cite{dobbins2003dts} described the depth-resolution limit set by the sweep angle. DTS studies measure nodules in 2D or by reader judgement.
+
+\paragraph{Sparse-view CT with deep priors.} Score-based and diffusion models have been applied in the sinogram domain~\cite{guan2024sino}, with wavelet decompositions~\cite{xu2024sword,wu2024wavelet}, for spectral CT~\cite{liu2024spectral} and zero-shot with variational solvers~\cite{he2025vss}; DPS and DDS add data consistency to sampling~\cite{chung2023dps,chung2024dds}, and foundation models learn lung CT priors from \num{100000} scans~\cite{wang2025lctfound}. Classical iterative reconstruction~\cite{herman2009} and compressed sensing~\cite{candes2006} suppress noise but over-smooth fine detail, and implicit neural fields~\cite{mildenhall2020nerf} are slow per patient. Lighter physics-conditioned diffusion~\cite{vavekanand2025}, deep image prior with ADMM~\cite{chang2025dip}, mixed priors for metal artifacts~\cite{jiang2025mixed}, learned view sampling~\cite{yang2025sampling} and unsupervised low-dose denoising~\cite{jeon2023mmnet} address other parts of the problem. All of these report image quality on CT volumes; none produces a calibrated clinical measurement or uses DTS geometry.
+
+\paragraph{3D Gaussians in tomography.} 3DGR-CT~\cite{li2025gr} and R$^2$-Gaussian~\cite{zha2024r2} reconstruct sparse-view CT with Gaussians, and spatiotemporal Gaussians handle motion~\cite{xie2025pmf,liu2025fmgs}. They use Gaussians for speed and quality, not for closed-form mass, and have no learned prior for the missing wedge.
+
+\paragraph{Trustworthiness and uncertainty.} Bhadra et al.~\cite{bhadra2021} defined hallucinations through the null space of the imaging operator, DDNM~\cite{wang2023ddnm} uses a range--null-space decomposition inside diffusion sampling, and Zhang et al.~\cite{zhang2025pail} used uncertainty estimates to suppress artifacts in limited-data CT. Conformal predictive systems are available in the open-source crepes library~\cite{bostrom2022crepes} but have not been applied to imaging biomarkers from DTS.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Summary of the most related research.}
+\label{tab:related}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Work & Method & Key finding & Gap for DTS nodule measurement \\
+\midrule
+Li et al.~\cite{li2025gr} & FBP-guided 3D Gaussians & Faster than neural fields & Whole-volume CT; no prior; no measurement \\
+Zha et al.~\cite{zha2024r2} & Radiative Gaussian splatting & Accurate volume integration & No learned prior; no uncertainty \\
+Guan et al.~\cite{guan2024sino} & Sinogram-domain diffusion & Handles varying sparsity & 2D; no 3D consistency \\
+He et al.~\cite{he2025vss} & Zero-shot variational score solver & No paired data needed & Heavy compute; image metrics only \\
+Chung et al.~\cite{chung2023dps,chung2024dds} & DPS / DDS sampling & Measurement-consistent samples & Not for DTS; not calibrated \\
+Wang and Guo~\cite{wang2025lctfound} & Lung CT foundation model & Strong transfer & CT only \\
+Bhadra et al.~\cite{bhadra2021} & Null-space hallucination maps & Formal definition of hallucination & No truth-referenced skill per nodule \\
+Zhang et al.~\cite{zhang2025pail} & Progressive artifact learning & Fewer false structures & Uncertainty not calibrated \\
+de Hoop et al.~\cite{dehoop2010} & Nodule mass on CT & Mass detects growth earlier & CT only \\
+Bostr\"om~\cite{bostrom2022crepes} & Conformal predictive systems & Valid CDFs for any regressor & Not applied to imaging biomarkers \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Gap Analysis}
+\label{sec:gap}
+
+The review shows four gaps. First, DTS research stops at 2D detection and size; no work argues from the projection physics which 3D quantity DTS can measure. Second, generative sparse-view methods target whole CT volumes and image metrics, not a clinical number for one nodule, and none is built for the DTS sweep. Third, Gaussian tomography uses Gaussians for speed, not for closed-form mass. Fourth, reconstruction uncertainty is usually raw variance, which is not calibrated, and explanations of what a prior invented are not checked against the truth. \Cref{tab:gap} compares the closest works.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Domain comparison: \cmark\ addressed, \xmark\ not addressed, $\circ$ partially.}
+\label{tab:gap}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{l ccccccc}
+\toprule
+Work & \makecell{DTS\\geometry} & \makecell{Learned\\prior} & \makecell{Data\\consistency} & \makecell{Gaussian\\mass} & \makecell{Clinical\\biomarker} & \makecell{Calibrated\\uncertainty} & \makecell{Seen/unseen\\explanation} \\
+\midrule
+Li et al.~\cite{li2025gr} & \xmark & \xmark & \cmark & \xmark & \xmark & \xmark & \xmark \\
+Zha et al.~\cite{zha2024r2} & \xmark & \xmark & \cmark & \xmark & \xmark & \xmark & \xmark \\
+He et al.~\cite{he2025vss} & \xmark & \cmark & \cmark & \xmark & \xmark & \xmark & \xmark \\
+Chung et al.~\cite{chung2023dps} & \xmark & \cmark & \cmark & \xmark & \xmark & \xmark & \xmark \\
+Zhang et al.~\cite{zhang2025pail} & \xmark & \cmark & \cmark & \xmark & \xmark & $\circ$ & \xmark \\
+Bhadra et al.~\cite{bhadra2021} & \xmark & \xmark & -- & \xmark & \xmark & \xmark & \cmark \\
+de Hoop et al.~\cite{dehoop2010} & \xmark & \xmark & -- & \xmark & \cmark & \xmark & \xmark \\
+\midrule
+\textbf{MedLift-3D} & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\paragraph{What we do not claim.} 3D Gaussians in medical imaging, uncertainty for Gaussian reconstructions, conformal prediction in CT and for lung nodules, null-space hallucination analysis and saliency maps all exist already. Our contribution is their combination for DTS nodule measurement, the mass-first argument, and a calibrated, truth-checked evaluation.
+
+\section{Summary}
+
+DTS is low-dose and affordable but blind in depth, and existing AI reconstruction neither respects which quantities DTS can measure nor states how far its numbers can be trusted. MedLift-3D addresses this gap by measuring mass first, filling depth with a data-consistent diffusion prior, calibrating every number with conformal methods, and explaining what was measured and what was supplied by the prior. \Cref{ch:design} turns this into requirements and a design.

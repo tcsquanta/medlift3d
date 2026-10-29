@@ -1,0 +1,223 @@
+\chapter{Implementation and Results}
+\label{ch:results}
+
+This chapter describes the hardware and tools, how every requirement was verified, and the results for hypotheses H1--H6. All numbers come from the full run of October 27, 2026 on held-out test patients unless stated otherwise.
+
+\section{Environment Setup}
+
+\paragraph{Hardware.} \Cref{tab:hardware} lists the computing resources. CPU-only work (downloading about 64~GB of CT and building the cases) ran on a cheap CPU machine, and both machines shared one network volume so that the GPU machine started from the finished cases.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Computing resources.}
+\label{tab:hardware}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}p{1.8cm}}
+\toprule
+Resource & Used for & Specification & Cost \\
+\midrule
+Laptop / Kaggle CPU & Unit tests; synthetic-phantom smoke test & 4 cores & Free \\
+Kaggle notebook & 40-patient pilot run; final demo and report viewer & $2\times$ NVIDIA T4, 16~GB & Free \\
+RunPod CPU pod & Steps 02--04: patient selection, TCIA download, case building & Rented CPU & $<$ US\$2 \\
+RunPod GPU pod & Steps 05--18: simulation, training, evaluation & NVIDIA L40S, 48~GB & about US\$1/h \\
+RunPod network volume & Shared storage between pods; backup after every step & Persistent volume & included \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Software and tools.} \Cref{tab:tools} lists the tools with the alternatives considered.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Software tools and the reasons for choosing them.}
+\label{tab:tools}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Tool & Role & Why chosen (alternative) \\
+\midrule
+Python 3.11+ & All code & Standard for medical AI (MATLAB: licence cost) \\
+PyTorch 2.x & Projector, diffusion U-Net, detector, Gaussians; bf16 mixed precision & Differentiable physics and models in one framework \\
+Own ray-driven projector (PyTorch) & DTS forward and back projection with gradients & Exact DTS geometry, differentiable, no CUDA build (ASTRA: separate build, no autograd) \\
+pydicom, pylidc & LIDC DICOM and the four radiologists' annotations & Official annotation access \\
+NumPy, SciPy, scikit-image & Morphology, segmentation, metrics & Mature and tested \\
+crepes, scikit-learn & Conformal predictive systems; calibration metrics & Peer-reviewed implementation~\cite{bostrom2022crepes} \\
+Gradio & Browser application & Quick UI in Python (Flask + JavaScript: more work) \\
+Matplotlib, pytest & Figures; 69 unit tests & Standard \\
+bash, tmux & Unattended 14-hour run with resume and backups & Survives disconnections \\
+Git, GitHub & Version control & Team collaboration \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Configuration and pipeline.} One YAML file holds every setting (geometry, dose, prism size, network size, sampling steps, number of hypotheses, $\alpha=0.1$) and the random seed is fixed. The pipeline has 18 scripted steps: 00 environment check, 01 physics verification, 02 patient selection, 03 TCIA download, 04 cases and split, 05 DTS simulation, 06 SIRT, 07 training pairs, 08 diffusion training, 09 per-nodule pipeline, 10 evaluation and conformal intervals, 11 growth, 12 demo, 13 geometry sensitivity, 14 detector, 15 fit check, 16 conformal predictive systems, 17 explainability and 18 HTML report. Each step prints PASS/FAIL lines with the expected value.
+
+\section{Testing and Evaluation}
+
+\paragraph{Verification strategy.} Testing was done at four levels:
+\begin{enumerate}
+  \item \textbf{Unit tests (69):} projector adjointness and mass conservation, the Gaussian mass formula, conformal coverage on synthetic data, Mondrian group coverage, CPS probabilities against crepes, the CGLS seen/unseen split, and fit-check parsing.
+  \item \textbf{Smoke test:} the full pipeline on synthetic chest phantoms on a CPU in 10--20 minutes.
+  \item \textbf{Real-data pilots:} 4 patients on CPU and 40 patients on Kaggle, which exposed and fixed the depth-support bug (prism attenuation 67--81\% $\rightarrow$ 98.7\%).
+  \item \textbf{Full run:} 583 patients with automatic checks after every step and an HTML report listing all checks.
+\end{enumerate}
+
+\paragraph{Data split.} Patients, not nodules, were split 60/20/20: 350 training, 117 calibration and 116 test patients. The diffusion model was selected on 10\% of the training patients held out, the detector on the calibration patients, and the conformal methods were calibrated on the calibration patients. Test patients were used only for the final tables.
+
+\paragraph{Metrics and baselines.} Volume and mass error (median signed error, median absolute percentage error MdAPE, Bland--Altman limits), failure rate, nodule-box PSNR, interval coverage and median width, Brier score and expected calibration error (ECE) of category probabilities, doubling-time error and NELSON category accuracy, detection CPM and sensitivity, seen fraction and unseen skill, and run time. Baselines: 2D diameter converted to a sphere volume (clinical practice), coarse SIRT, prism ROI-SIRT, physics-only Gaussians, and diffusion without Gaussians.
+
+\paragraph{Requirement verification.} \Cref{tab:verify} traces every requirement of \cref{tab:fr,tab:nfr} to its measured result.
+
+{\small
+\begin{longtable}{>{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}p{1.3cm}}
+\caption{Requirement verification (traceability).}\label{tab:verify}\\
+\toprule
+Req. & Criterion & Result & Met \\
+\midrule
+\endfirsthead
+\toprule
+Req. & Criterion & Result & Met \\
+\midrule
+\endhead
+FR-01 & Positions agree; splits disjoint & DICOM vs pylidc slice positions 0.000~mm; 350/117/116 patients, disjoint & Yes \\
+FR-02 & Integral = mass within 0.1\% & 0.03\% in all 15 views; deeper object of equal mass indistinguishable & Yes \\
+FR-03 & Residual $<0.9$; depth/in-plane $>1.3$ & Residual 0.02--0.03 of start; depth smear 2--3.5$\times$ & Yes \\
+FR-04 & Learned CPM $>$ baseline & 0.298 vs 0.017 & Yes \\
+FR-05 & Prism keeps column attenuation & 98.7\% after the depth-support fix & Yes \\
+FR-06 & Samples beat physics input & Nodule-box PSNR 15.23 vs 11.88~dB (+3.35~dB) & Yes \\
+FR-07 & Finite values; failures reported & \fillme{failure rate per method from table\_accuracy} & \fillme{} \\
+FR-08 & Coverage $90\pm3\%$; Brier $<$ vote & \fillme{from table\_uq\_intervals and table\_uq\_risk} & \fillme{} \\
+FR-09 & Growth metrics reported & \fillme{from table\_growth} & \fillme{} \\
+FR-10 & Explanation outputs & Seen/unseen, saliency and error-driver tables on 30 test nodules & Yes \\
+FR-11 & Demo self-test; report & Demo served from Kaggle; HTML report with 13 checked steps & Yes \\
+NFR-01 & $\leq 60$~s per nodule & 40--50~s per nodule for all five methods together on the L40S & Yes \\
+NFR-02 & $\leq$ US\$50 & about US\$16 for the full run & Yes \\
+NFR-03 & Reproducible, checkable & Fixed seed, one configuration, 69 tests, PASS/FAIL logs & Yes \\
+NFR-04 & No optimistic bias & Test patients unused until final tables; separate simulation and reconstruction grids & Yes \\
+NFR-05 & No bare numbers & Every value has an interval and a low-confidence flag & Yes \\
+\bottomrule
+\end{longtable}
+}
+
+\paragraph{Issues found and fixed.} (1) Without a depth support, SIRT placed attenuation in the air around the patient and the prism lost a third of its attenuation as false background; fixed by confining SIRT to the patient. (2) The training-free detector mostly found end-on vessels (recall in the top 10 of 6\% in the pilot); replaced by the learned detector. (3) A first CPS implementation capped probabilities at $n/(n+1)$; fixed with the smoothed mid-point p-value and verified against crepes. (4) In step~10 the asymmetric split-conformal upper bound for some methods became effectively unbounded because calibration nodules where a method found nothing (measured volume $\approx 0$) produce unbounded log-ratios. \fillme{state the resolution: failed measurements excluded from calibration and reported as failures, or step-16 CPS intervals used instead} (5) The HTML report lists three failed checks. \fillme{name and explain the three failed checks}
+
+\section{Results and Discussion}
+
+\subsection{Dataset}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Dataset characteristics.}
+\label{tab:data}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+LIDC-IDRI patients ($\geq$1 nodule of 4--30~mm marked by $\geq$3 readers, slices $\leq$2.5~mm) & 583 \\
+Nodules & \num{1144} \\
+Train / calibration / test patients & 350 / 117 / 116 \\
+Test nodules (detector evaluation) & 225 in 116 scans \\
+Nodules measured in step 09 & \fillme{cal / test} \\
+Consensus volume / mean reader volume & 0.81 \\
+Single-view nodule contrast-to-noise ratio (median) & 3.3 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\subsection{Diffusion Prior Training and Fit}
+
+Training ran for \num{27610} steps within its 6-hour budget (batch 8, about 0.77~s per step). The loss fell from 0.1186 to 0.0476 (mean over the last 10\% vs the first 10\% of steps). On held-out training pairs the prior's samples reached 15.23~dB PSNR in the nodule box against 11.88~dB for the physics-only input (+3.35~dB), and 13.74 vs 10.16~dB over the whole prism including the chest walls. At fixed noise levels the denoising loss was 0.0340 on training pairs and 0.0329 on held-out pairs, a ratio of 0.97, so the model did not overfit (\cref{fig:fit}). Its held-out loss was still falling at the end of the budget, so longer training would probably help.
+
+\resultfig{fit_curves.png}{Denoising loss at fixed noise levels on training and held-out pairs during training (step 15).}{fig:fit}
+
+\subsection{Nodule Detection}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Nodule detection on the 116 test patients (225 nodules).}
+\label{tab:detection}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lccc}
+\toprule
+Detector & CPM & Sensitivity at 1 / 2 / 4 / 8 FP per scan & Recall in top 10 \\
+\midrule
+Learned 3D U-Net (ours) & \textbf{0.298} & 28\% / 35\% / 40\% / 46\% & \textbf{48\%} \\
+Training-free LoG + Hessian & 0.017 & 0\% / 1\% / 3\% / 7\% & 8\% \\
+Learned, in-plane position only (diagnostic) & 0.300 & 28\% / 35\% / 40\% / 47\% & 49\% \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+The learned detector is 17 times better than the training-free baseline by CPM (\cref{tab:detection}). The in-plane-only row is almost identical, so the misses are not suggestions at the wrong depth but nodules that a DTS view does not separate from vessels and chest wall. A sensitivity of 35\% at two false positives per scan is far below CT detectors, which is why the detector only suggests and the clinician can click anywhere.
+
+\resultfig[0.7\linewidth]{froc_test.png}{FROC curves of the learned and training-free detectors on the test patients (step 14).}{fig:froc}
+
+\subsection{Measurement Accuracy (H1, H2)}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Measurement error on test nodules against the radiologist consensus. \fillme{copy from outputs/10\_evaluation/table\_accuracy.md}}
+\label{tab:accuracy}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lccc}
+\toprule
+Method & Volume MdAPE & Mass MdAPE & Failure rate \\
+\midrule
+2D diameter $\rightarrow$ sphere & \fillme{} & -- & \fillme{} \\
+Coarse SIRT & \fillme{} & \fillme{} & \fillme{} \\
+Prism ROI-SIRT & \fillme{} & \fillme{} & \fillme{} \\
+Physics-only Gaussians & \fillme{} & \fillme{} & \fillme{} \\
+Diffusion & \fillme{} & \fillme{} & \fillme{} \\
+Diffusion + Gaussians (ours) & \fillme{} & \fillme{} & \fillme{} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{H1} (mass error $<$ volume error): \fillme{supported or not, with numbers}. \textbf{H2} (the prior reduces volume error compared with physics-only reconstruction): \fillme{supported or not, with numbers}. \fillme{discuss small vs large nodules and the Bland--Altman bias}
+
+\resultfig{volume_errors.png}{Volume error of each method against the radiologist consensus on test nodules (step 10).}{fig:volerr}
+\resultfig{bland_altman_volume.png}{Bland--Altman plot of volume for the best method (step 10).}{fig:ba}
+
+\subsection{Calibrated Uncertainty (H3, H5)}
+
+\fillme{copy outputs/16\_uncertainty/table\_uq\_intervals.md, table\_uq\_groups.md and table\_uq\_risk.md: test coverage of the 90\% intervals for mass and volume (target 87--93\%), median width, coverage per size group with and without Mondrian, Brier score and ECE of the EUPS probabilities against the raw ensemble vote}
+
+\textbf{H3}: \fillme{}. \textbf{H5}: \fillme{}.
+
+\resultfig{volume_uq_overview.png}{Uncertainty overview for volume: prediction intervals, regression with uncertainty, residuals and interval widths (step 16).}{fig:uq}
+\resultfig[0.75\linewidth]{reliability.png}{Reliability diagram of the calibrated EUPS category probabilities against the raw ensemble vote (step 16).}{fig:reliability}
+
+\subsection{Growth (H4)}
+
+\fillme{copy outputs/11\_growth/table\_growth.md: VDT and MDT errors and NELSON category accuracy}
+
+\textbf{H4} (MDT classifies growth better than VDT): \fillme{}.
+
+\resultfig[0.75\linewidth]{doubling_time.png}{Measured vs true doubling time on virtual follow-up scans (step 11).}{fig:growth}
+
+\subsection{Explainability (H6)}
+
+\fillme{copy outputs/17\_explain/table\_explain.md and table\_error\_drivers.md: fraction of nodule mass in the seen part, fraction of shape in the unseen part, unseen skill of the prior with 95\% CI, Spearman correlations of error with size, depth and contrast}
+
+For the detector, the share of input$\times$gradient saliency within 10~mm of the suggestion was 0.15 for true positives and 0.16 for false positives: the detector looks at the local region in both cases, and false positives are caused by local structures that resemble nodules (vessels seen end-on), not by attention far from the candidate.
+
+\textbf{H6}: \fillme{}.
+
+\resultfig{seen_unseen_example.png}{Seen/unseen split of the true CT and of the prior's samples for one test nodule (step 17).}{fig:seenex}
+\resultfig{saliency_examples.png}{Input$\times$gradient saliency of the detector for true and false positive suggestions (step 17).}{fig:saliency}
+
+\subsection{Acquisition Geometry Sensitivity}
+
+On 12 nodules of two test patients, the depth smear (depth over in-plane width of the artifact spread) was 5.13 for 15 views over \ang{30}, 5.34 for 60 views over \ang{30} (four times the compute), 4.69 for 15 views over \ang{40} and 4.61 for 74 views over \ang{40}, against 0.95 for CT. At equal dose the number of views hardly matters, while a \ang{40} sweep reduces the smear by about 9\%; our 15-view, \ang{30} setting is therefore the conservative case.
+
+\subsection{Run Time, Cost and Application}
+
+The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. On patient LIDC-IDRI-0018 a click on an annotated nodule returned mass and volume with intervals, the EUPS category with calibrated probabilities and the 3D view (\cref{fig:demo}); a click where no nodule exists returned ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
+
+\resultfig{demo_report.png}{The click-to-3D application on a test patient: report with intervals and category probabilities.}{fig:demo}
+
+\section{Summary}
+
+Every requirement with a fixed criterion was verified by an automatic check. The diffusion prior beat the physics-only input by 3.35~dB in the nodule region without overfitting, the learned detector beat the training-free baseline by a factor of 17 in CPM, and the full study cost about US\$16. \fillme{one sentence each on the H1--H6 outcomes}. Results that did not support a hypothesis are reported as such.

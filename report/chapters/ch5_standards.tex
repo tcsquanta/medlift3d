@@ -1,0 +1,305 @@
+\chapter{Standards and Design Constraints}
+\label{ch:standards}
+
+This chapter lists the standards MedLift-3D follows, with the alternatives considered, and analyses its economic, environmental, ethical, health and safety, social, political, legal, cultural and sustainability aspects. It ends with the cost analysis and the complex engineering problem mapping.
+
+\section{Compliance with the Standards}
+
+\subsection{Software Standards}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Software standards.}
+\label{tab:swstd}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Standard & How it is applied & Alternatives (pros / cons) & Rationale \\
+\midrule
+DICOM~\cite{dicom} & Input CT read from DICOM; geometry checked against pylidc (0.000~mm difference) & NIfTI: simpler but loses scanner metadata & Hospitals and PACS store images in DICOM \\
+Compressed NumPy with JSON headers & Cases, pairs and results keep their geometry in a header & NIfTI cannot hold per-nodule reader masks with metadata; HDF5 is a heavier dependency & One self-describing file per case \\
+IEC 62304~\cite{iec62304} (software life cycle) & Not certified; practices followed: requirements traced to tests (\cref{tab:verify}), version control, unit tests, documented anomalies & Ad-hoc research code: faster but unverifiable & Needed for any clinical use; tracing now costs little \\
+ISO 14971~\cite{iso14971} (risk management) & Hazard analysis with mitigations (\cref{tab:risk}) & No risk analysis & Required by regulators \\
+ISO 13485~\cite{iso13485} (quality management) & Identified as required for a product; out of scope here & -- & Applies to a device manufacturer \\
+PEP 8, pytest & Code style; 69 automated tests & No tests: faster now, bugs later & Readable and checkable team code \\
+IEEE 754 & fp32 for physics and measurement; bf16 only inside the network & fp16 overflows in 3D U-Nets; fp64 doubles memory & bf16 keeps the fp32 range \\
+Open licences & LIDC-IDRI under CC BY 3.0 with citation~\cite{tcia_policy}; PyTorch (BSD), crepes (BSD-3), Gradio (Apache 2.0) & Proprietary data or libraries: costly, restrictive & Legal reuse with attribution \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Hardware Standards}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Hardware standards.}
+\label{tab:hwstd}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Standard & How it is applied & Alternatives & Rationale \\
+\midrule
+NVIDIA CUDA platform & All GPU computation through PyTorch's CUDA backend & AMD ROCm: fewer cloud offers; CPU only: training would take weeks & Widest availability on rented GPUs \\
+IEC 60601-1 / 60601-2-54 (X-ray equipment safety) & Applies to the DTS unit that would produce real data, not to our software & -- & We rely on certified DTS hardware \\
+ICRP 103 effective dose~\cite{icrp103} & Doses compared in mSv for CT, low-dose CT and DTS & Air kerma: less meaningful for patients & Standard measure of patient risk \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Communication Standards}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Communication standards.}
+\label{tab:commstd}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\toprule
+Standard & How it is applied & Alternatives & Rationale \\
+\midrule
+HTTP/HTTPS with TLS & Application served locally over HTTP and to the browser through an HTTPS tunnel & Gradio share links (failed on Kaggle); SSH port forwarding (client setup) & Encrypted; works from any browser \\
+JSON (RFC 8259) & Reports, results and calibration files & XML: verbose; pickle: unsafe to load & Human-readable, language-neutral \\
+DICOM networking, HL7 FHIR & Future integration with hospital PACS and records & Custom APIs: no interoperability & Required in hospital workflows \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Design Constraints}
+
+\subsection{Economic Constraint}
+
+The project had no external funding, so all computation had to fit a student budget. Free resources were used wherever possible (laptop CPU, Kaggle GPUs for the pilot and the application), CPU-only steps (3--5 hours of download and case building) were moved to a cheap CPU machine, and GPU training was given a fixed 6-hour budget. The full study cost about US\$16 on the GPU and under US\$2 on the CPU machine. Clinically, the economic case rests on DTS: a DTS-capable radiography room costs a fraction of a CT scanner and examines patients faster, so follow-up by DTS can lower the cost of each follow-up for hospitals and patients.
+
+\subsection{Environmental Constraint}
+
+\paragraph{Energy and emissions.} The L40S GPU has a 350~W power limit, so the 14-hour run used at most about 5~kWh on the GPU, roughly 7~kWh including CPU, memory and cooling, plus under 1~kWh for the CPU machine. At a world-average grid intensity of about 0.48~kg CO$_2$ per kWh (Bangladesh's grid is higher, about 0.6), the study emitted roughly 3.5--5~kg CO$_2$, comparable to a 20--30~km car trip. One measurement (about 45~s on the GPU) uses about 0.004~kWh. These are estimates from rated power, following~\cite{lannelongue2021green}, not metered values.
+
+\paragraph{Data storage and waste.} The 64~GB of downloaded DICOM was deleted after conversion to compact cases, and intermediate files that can be regenerated were not backed up. No hardware was bought, so the project produced no electronic waste.
+
+\paragraph{Radiation as an environmental factor.} Replacing CT follow-ups (about 1.5--6~mSv) with DTS (about 0.1~mSv) reduces the population's collective radiation dose.
+
+\paragraph{Mitigations.} A small model (17.4~M parameters) instead of a large generator; a prism instead of whole-volume generation; fixed compute budgets; CPU work on CPU machines; trained models reused for evaluation and the application instead of retraining; and, for future runs, cloud regions powered by renewable energy.
+
+\subsection{Ethical Constraint}
+
+\paragraph{Professional ethics.} We followed the IEEE~\cite{ieeeethics} and ACM~\cite{acmethics} codes of ethics, in particular honesty about claims and results.
+\begin{itemize}
+  \item \textbf{Honest claims:} all results come from \emph{simulated} DTS, not real scanners, and \cref{sec:gap} lists what we do not claim.
+  \item \textbf{Honest results:} hypotheses were stated before the results, and the report gives whichever outcome we found, including a detector sensitivity of only 35\% at two false positives per scan and the issues in \cref{ch:results}.
+  \item \textbf{Credit:} all datasets, libraries and ideas we build on are cited. \fillme{keep or edit:} AI coding assistants were used during implementation; every part of the code was reviewed, tested and verified by the team, which takes responsibility for it.
+  \item \textbf{Fairness:} LIDC-IDRI comes mainly from US patients; performance on other populations, for example patients with healed tuberculosis scars, is unknown and is stated as such.
+  \item \textbf{Data ethics:} only de-identified public data, used under its licence, with no attempt at re-identification.
+\end{itemize}
+
+\paragraph{Professional responsibility.} The team owns its decisions and mistakes. When the real-data pilot showed that the prism lost a third of its attenuation, we traced the cause to our own missing depth support and fixed it before the full run; when the first design of the project could not be verified, we narrowed it rather than present training losses as success. Each step's owner (\cref{tab:tasks}) is accountable for its checks. The system is decision support: the responsibility for a diagnosis stays with the radiologist.
+
+\subsection{Health and Safety Constraint}
+
+\paragraph{Health impacts.} \emph{Physical:} the main benefit is lower radiation per follow-up (DTS about 0.1~mSv vs about 1.5~mSv for low-dose CT or several mSv for diagnostic CT), which matters because nodule follow-up repeats over years~\cite{rampinelli2017,mascalchi2017}. The main physical risk is a wrong measurement that delays treatment of a growing cancer or leads to an unnecessary biopsy. \emph{Mental:} living with an indeterminate nodule causes anxiety, and a falsely reassuring or falsely alarming number makes it worse.
+
+\paragraph{Actionable solutions.} Every number is reported with a calibrated interval and category probabilities so that the clinician sees when a result is uncertain; a low-confidence flag recommends CT; and results should be explained to patients by the clinician in categories rather than raw numbers. \Cref{tab:risk} lists the main hazards.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Safety risk analysis (ISO 14971 style).}
+\label{tab:risk}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X}
+\toprule
+Hazard & Cause & Effect & Mitigation \\
+\midrule
+Underestimated growth & Prior fills depth wrongly & Delayed treatment & Mass-first reporting; intervals; seen/unseen explanation; CT recommended when flagged \\
+Overestimated growth & Vessel or chest wall included & Unnecessary CT or biopsy & Segmentation confined to a plausible extent; leaks reported as not measurable \\
+Hallucinated nodule & Prior invents structure & False alarm & Data consistency with X-rays; clinician confirms \\
+Missed nodule & Detector sensitivity 35\% at 2 FP/scan & Nodule not suggested & Clinician can click anywhere; detector is an aid \\
+Out-of-distribution use & Other population, scanner or dose & Silent errors & Validated setting stated; local validation and recalibration required \\
+Over-trust & Automation bias & Clinician stops checking & Intervals and flags shown prominently; user training \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Social Constraint}
+
+In the short term, DTS-based follow-up could shorten CT waiting lists and reduce travel for patients outside major cities. In the long term it could make nodule surveillance, and later screening, feasible where CT capacity is the bottleneck, improving early diagnosis where the survival gain is largest. From the patient's perspective this means less dose and cost; from the radiologist's, a measurement tool with honest uncertainty; from the health system's, cheaper follow-up that needs training and local validation. Possible negative effects are over-diagnosis if many more people are followed, and a widening gap if only private hospitals adopt the tool; both argue for public-sector deployment and guideline-based use.
+
+\subsection{Political Constraint}
+
+Adoption of health technology depends on public health policy and procurement. In Bangladesh, imaging equipment and software are purchased mainly through government tenders and large private hospital groups, so adoption would need evidence accepted by the health authorities and inclusion in national cancer-control plans. The use of foreign cloud computing for health data is itself a policy question, so a deployment should keep data and computation in the country.
+
+\subsection{Sustainability}
+
+\paragraph{Lifecycle plan.} (1) Development and verification (this project); (2) retrospective validation on real DTS with CT ground truth from a partner hospital; (3) a prospective reader study; (4) regulatory registration; (5) deployment with monitoring of measurement errors and interval coverage; and (6) periodic recalibration of the conformal layer, which needs only new calibration cases, not retraining, when scanners or populations change.
+
+\paragraph{Three dimensions.} \emph{Environmental:} small model, low energy per measurement, no special hardware. \emph{Economic:} runs on one mid-range GPU or a low-cost cloud instance, and open-source code avoids licence fees. \emph{Social:} documented and tested code that another team can maintain, and a method that extends to other limited-angle modalities.
+
+\subsection{Legal Considerations}
+
+\begin{itemize}
+  \item \textbf{Data licence:} LIDC-IDRI is distributed by TCIA under the Creative Commons Attribution 3.0 licence and the TCIA data usage policy~\cite{tcia_policy}; we cite the required publication~\cite{armato2011lidc} and make no attempt at re-identification.
+  \item \textbf{Medical device regulation:} software that measures nodules for diagnosis is software as a medical device. In Bangladesh, medical devices are registered by the Directorate General of Drug Administration (DGDA) \fillme{verify the current DGDA rules for software}. Elsewhere the US FDA (510(k) or De Novo), the EU Medical Device Regulation~\cite{eumdr} and the EU AI Act~\cite{euaiact} would apply; each requires risk management~\cite{iso14971}, life-cycle processes~\cite{iec62304} and clinical evidence.
+  \item \textbf{Data protection:} a clinical deployment processes personal health data and must follow Bangladesh's personal data protection law \fillme{verify the current act and its status} and, for international data, GDPR and HIPAA: consent, purpose limitation and secure storage. The demo uses no personal data.
+  \item \textbf{Liability:} the intended use is decision support; the clinician remains responsible for the diagnosis.
+\end{itemize}
+
+\subsection{Cultural Considerations}
+
+\begin{itemize}
+  \item \textbf{Language and literacy:} a deployed interface should offer Bangla and present results in plain categories, with numbers available for specialists.
+  \item \textbf{Family-centred decisions:} diagnoses are often discussed with the family, so uncertainty should be explained through the clinician in a way the family can follow, not as raw probabilities.
+  \item \textbf{Stigma:} lung cancer is often linked to smoking and blame; communication should avoid blame, and many patients, especially women exposed to cooking smoke, have never smoked.
+  \item \textbf{Local disease patterns:} healed tuberculosis leaves calcified granulomas that resemble nodules. The model was not trained on such patients, so local validation is required before use, which also respects patients' right to a tool tested on people like them.
+  \item \textbf{Trust:} many patients trust the doctor more than a machine; keeping the clinician in charge respects this.
+\end{itemize}
+
+\section{Cost Analysis}
+
+\paragraph{Actual project budget.} \Cref{tab:budget} gives the actual cost of FYDP-III (exchange rate assumed: US\$1 $\approx$ BDT 120).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Actual project budget.}
+\label{tab:budget}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lrr}
+\toprule
+Item & US\$ & BDT \\
+\midrule
+RunPod GPU (L40S, 14-hour full run incl.\ network volume) & $\approx 16$ & $\approx \num{1900}$ \\
+RunPod CPU machine (download and case building) & $<2$ & $<240$ \\
+Kaggle notebooks (pilot, application) & 0 & 0 \\
+LIDC-IDRI data and open-source software & 0 & 0 \\
+\midrule
+\textbf{Total} & \textbf{about 18} & \textbf{about 2,150} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\paragraph{Alternate budget: buy instead of rent.} A workstation with one RTX~4090 (24~GB) would cost about BDT 4.5--5.5 lakh \fillme{check the current local price}. It would run the study in 20--30 hours but pays off only after hundreds of runs. Renting cost less than 1\% of buying and provided a larger 48~GB GPU, so renting was the right choice for a one-off study; buying makes sense only for a centre with continuous use.
+
+\paragraph{Revenue model (illustrative).} For a commercial version, assume 18 months of validation and registration and customers among diagnostic centres and hospitals with DTS-capable radiography (\cref{tab:revenue,tab:cashflow}).
+
+\begin{table}[htbp]
+\centering\small
+\caption{Illustrative revenue (BDT lakh).}
+\label{tab:revenue}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lccc}
+\toprule
+Revenue stream (price) & Year 1 & Year 2 & Year 3 \\
+\midrule
+Pay per study (BDT 300 per nodule follow-up) & 0 & 18 (\num{6000} studies) & 60 (\num{20000} studies) \\
+Hospital subscription (BDT 6 lakh per year) & 0 & 18 (3 hospitals) & 48 (8 hospitals) \\
+\midrule
+\textbf{Total revenue} & \textbf{0} & \textbf{36} & \textbf{108} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Illustrative expenses and cash flow (BDT lakh).}
+\label{tab:cashflow}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lccc}
+\toprule
+Item & Year 1 & Year 2 & Year 3 \\
+\midrule
+Development team (3 engineers) & 25 & 25 & 30 \\
+Clinical validation study & 20 & 10 & -- \\
+Regulatory registration and quality system & 8 & 4 & 4 \\
+Cloud / GPU and hosting & 3 & 5 & 8 \\
+Marketing and training & 2 & 6 & 8 \\
+\midrule
+\textbf{Total expenses} & \textbf{58} & \textbf{50} & \textbf{50} \\
+Net cash flow & $-58$ & $-14$ & $+58$ \\
+\textbf{Cumulative cash flow} & $\mathbf{-58}$ & $\mathbf{-72}$ & $\mathbf{-14}$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+Under these assumptions the venture breaks even early in year four. The largest uncertainty is the cost and duration of clinical validation, which is why a partnership with a public hospital is the first step.
+
+\section{Complex Engineering Problem}
+
+MedLift-3D is a complex engineering problem: it is ill-posed by physics, combines X-ray physics, generative AI and statistics, has conflicting requirements (dose, accuracy, honesty, cost), and has direct consequences for patients.
+
+\subsection{Complex Problem Solving}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Mapping with complex problem solving.}
+\label{tab:cep}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{ccccccc}
+\toprule
+\makecell{P1\\Depth of\\knowledge} & \makecell{P2\\Range of conflicting\\requirements} & \makecell{P3\\Depth of\\analysis} & \makecell{P4\\Familiarity\\of issues} & \makecell{P5\\Extent of\\applicable codes} & \makecell{P6\\Stakeholder\\involvement} & \makecell{P7\\Inter-\\dependence} \\
+\midrule
+\cmark & \cmark & \cmark & \cmark & \cmark & $\circ$ & \cmark \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\paragraph{P1 -- Depth of knowledge.} The solution requires X-ray projection physics, linear algebra of range and null spaces, probabilistic diffusion models, conformal statistics and 3D deep learning, beyond the standard curriculum. \Cref{tab:wk} maps the knowledge profiles.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Knowledge profile mapping for P1.}
+\label{tab:wk}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X}
+\toprule
+Knowledge profile & Where it is used \\
+\midrule
+WK1 Natural sciences & X-ray attenuation, Poisson photon statistics, radiation dose \\
+WK2 Mathematics & Projection moments and conditioning; CGLS; probability and exchangeability for conformal prediction \\
+WK3 Engineering fundamentals & Numerical methods (SIRT, conjugate gradients), algorithms, data structures \\
+WK4 Specialist knowledge & Tomography, diffusion models, 3D U-Nets, Gaussian representations \\
+WK5 Engineering design & Requirements, prism design, verification steps, application \\
+WK6 Engineering practice & Cloud GPU operation, testing, version control, reproducibility \\
+WK7 Engineering in society & Radiation safety, regulation, ethics, cultural factors \\
+WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussians and conformal prediction \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{P2 -- Range of conflicting requirements.} Dose vs accuracy, filling the missing wedge vs never inventing anatomy, single numbers vs honest intervals, memory vs field of view, and detection recall vs false positives (\cref{tab:conflicts}).
+
+\paragraph{P3 -- Depth of analysis.} We derived from first principles which quantities DTS can measure, built a 583-patient virtual trial, and analysed calibration, size-group coverage and seen/unseen content rather than image quality alone.
+
+\paragraph{P4 -- Familiarity of issues.} No standard solution exists for calibrated 3D nodule measurement from DTS; the combination of a data-consistent prior inside a DTS prism, Gaussian mass and conformal calibration had to be designed for this problem.
+
+\paragraph{P5 -- Extent of applicable codes.} DICOM, IEC 62304, ISO 14971, data licences and medical device regulation (\cref{tab:swstd}).
+
+\paragraph{P6 -- Extent of stakeholder involvement (partial).} Clinical needs were taken from guidelines and supervisor feedback; direct evaluation by radiologists is future work.
+
+\paragraph{P7 -- Interdependence.} Simulation, reconstruction, prior, Gaussians, calibration and detector depend on each other: the depth-support bug in reconstruction, for example, corrupted the training data and every downstream measurement until it was fixed.
+
+\subsection{Engineering Activities}
+
+\begin{table}[htbp]
+\centering\small
+\caption{Mapping with complex engineering activities.}
+\label{tab:cea}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{ccccc}
+\toprule
+\makecell{A1\\Range of resources} & \makecell{A2\\Level of interaction} & \makecell{A3\\Innovation} & \makecell{A4\\Consequences for\\society and environment} & \makecell{A5\\Familiarity} \\
+\midrule
+\cmark & \cmark & \cmark & \cmark & \cmark \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\paragraph{A1 -- Range of resources.} A public archive of 583 patients (about 64~GB), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries, all within about US\$18.
+
+\paragraph{A2 -- Level of interaction.} Interaction among three team members with distinct roles, the supervisor, the course teacher, published clinical guidelines and open-source communities (crepes, Gradio, pylidc).
+
+\paragraph{A3 -- Innovation.} The mass-first projection-moment argument for DTS, the prism-based data-consistent diffusion prior with Gaussian mass, decision-level calibrated uncertainty, and a truth-referenced seen/unseen test.
+
+\paragraph{A4 -- Consequences for society and environment.} Lower radiation and cost per follow-up and wider access to nodule surveillance, balanced against the risk of wrong measurements, which intervals, flags and clinician control address (\cref{tab:risk}).
+
+\paragraph{A5 -- Familiarity.} Diffusion models, conformal predictive systems and null-space analysis go well beyond typical undergraduate projects and were learned during the project.
+
+\section{Summary}
+
+MedLift-3D follows the software, hardware and communication standards relevant to medical imaging software and prepares for IEC 62304 and ISO 14971. Its main impacts are positive (lower dose and cost, wider access), with clear risks (wrong measurements, over-trust, untested populations) that the design mitigates through calibrated intervals, flags, clinician control and a validation plan. The project cost about US\$18 and meets the attributes of a complex engineering problem.

@@ -1,0 +1,62 @@
+% DTS acquisition geometry (a) and the missing wedge in Fourier space (b)
+\begin{tikzpicture}[font=\footnotesize, >=Stealth]
+  % ---------------- (a) geometry
+  \begin{scope}
+    % detector
+    \fill[edge!25] (-3.6,-0.18) rectangle (3.6,0);
+    \draw[edge] (-3.6,-0.18) rectangle (3.6,0);
+    \node[below=1pt] at (0,-0.18) {flat-panel detector (43 cm, 0.8 mm pixels)};
+    % ray fans (drawn first, behind the patient)
+    \foreach \a in {-15, 0, 15} {
+      \fill[uiublue, opacity=0.07] ({6.2*tan(\a)},6.2) -- (-3.6,0) -- (3.6,0) -- cycle;
+    }
+    % patient cross-section
+    \draw[edge, fill=physics] (0,1.25) ellipse (2.7 and 1.05);
+    \draw[edge!60, fill=white] (-1.25,1.3) ellipse (0.95 and 0.68);
+    \draw[edge!60, fill=white] (1.25,1.3) ellipse (0.95 and 0.68);
+    % source track
+    \draw[edge, dashed] (-2.4,6.2) -- (2.4,6.2);
+    \foreach \a in {-15,-12.857,...,15.1} {
+      \fill[edge] ({6.2*tan(\a)},6.2) circle (0.035);
+    }
+    % rays through the nodule to the detector: the shadow moves with the tube angle
+    \foreach \a in {-15, 0, 15} {
+      \coordinate (S) at ({6.2*tan(\a)},6.2);
+      \draw[accent, thick] (S) -- ($(S)!{6.2/(6.2-1.45)}!(0.95,1.45)$) coordinate (D);
+      \fill[accent] (D) circle (0.06);
+      \fill[black] (S) ++(-0.14,0) rectangle ++(0.28,0.22);
+    }
+    \fill[accent] (0.95,1.45) circle (0.09);
+    \node[accent, right=1pt, fill=physics, inner sep=1pt] at (1.07,1.62) {nodule};
+    \node[above=3pt, align=center] at (0,6.4) {X-ray tube: 15 positions on a linear track};
+    % sweep angle, measured at the detector centre
+    \draw[edge, densely dotted] (0,0) -- (0,6.2);
+    \draw[edge, densely dotted] (0,0) -- ({6.2*tan(15)},6.2);
+    \draw[edge, densely dotted] (0,0) -- ({-6.2*tan(15)},6.2);
+    \draw[edge, <->] ({4.4*cos(105)},{4.4*sin(105)}) arc[start angle=105, end angle=75, radius=4.4];
+    \node[fill=white, inner sep=1pt] at (0,4.65) {$\pm 15^\circ$};
+    % SID dimension
+    \draw[<->, edge] (3.95,0) -- (3.95,6.2) node[midway, right, align=left] {SID\\1800 mm};
+    % axes
+    \draw[->] (-3.95,0.3) -- (-3.95,1.6) node[above] {depth $y$};
+    \draw[->] (-3.95,0.3) -- (-2.9,0.3) node[right] {$x$};
+    \node[font=\small\bfseries] at (-3.7,6.9) {(a)};
+  \end{scope}
+
+  % ---------------- (b) Fourier space
+  \begin{scope}[xshift=8.3cm, yshift=3.0cm]
+    \def\R{2.1}
+    \fill[uiublue!25] (0,0) -- (-15:\R) arc[start angle=-15, end angle=15, radius=\R] -- cycle;
+    \fill[uiublue!25] (0,0) -- (165:\R) arc[start angle=165, end angle=195, radius=\R] -- cycle;
+    \fill[pattern=north east lines, pattern color=red!60] (0,0) -- (15:\R) arc[start angle=15, end angle=165, radius=\R] -- cycle;
+    \fill[pattern=north east lines, pattern color=red!60] (0,0) -- (195:\R) arc[start angle=195, end angle=345, radius=\R] -- cycle;
+    \draw[edge] (0,0) circle (\R);
+    \draw[->] (-2.5,0) -- (2.6,0) node[right] {$k_x$};
+    \draw[->] (0,-2.5) -- (0,2.6) node[above] {$k_y$ (depth)};
+    \node[fill=white, inner sep=1pt, align=center] at (0,1.35) {missing wedge\\(not measured)};
+    \node[align=center, text=uiublue!70!black] at (1.25,-0.38) {measured};
+    \draw[edge] (1.3,0) arc[start angle=0, end angle=15, radius=1.3];
+    \node at (1.62,0.2) {$15^\circ$};
+    \node[font=\small\bfseries] at (-2.6,3.9) {(b)};
+  \end{scope}
+\end{tikzpicture}

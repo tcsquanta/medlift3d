@@ -1,0 +1,20 @@
+% Functional decomposition diagram
+\begin{tikzpicture}[sub/.style={draw=edge, fill=accentlight, minimum width=3.3cm, minimum height=0.9cm, align=center, font=\footnotesize\bfseries, text width=3.1cm}]
+  \node[mainproc, minimum width=5cm, text width=4.8cm, font=\small\bfseries] (root) at (7.8,2.0) {MedLift-3D system};
+  \foreach \i/\n in {0/{1 Data and\\ simulation}, 1/{2 Reconstruction}, 2/{3 Learned models}, 3/{4 Measurement\\ and UQ}, 4/{5 Interface\\ and reporting}} {
+    \node[sub] (s\i) at ({3.9*\i},0) {\n};
+  }
+  \draw[edge, thick] (root.south) -- ++(0,-0.6) coordinate (bus);
+  \draw[edge, thick] (s0.north |- bus) -- (s4.north |- bus);
+  \foreach \i in {0,...,4} { \draw[edge, thick] (s\i.north |- bus) -- (s\i.north); }
+  \newcommand{\leaves}[5]{%
+    \foreach \t [count=\k] in {{#2},{#3},{#4},{#5}} {
+      \node[leaf] (l#1\k) at ($(s#1.south)+(0.3,{-0.95*\k+0.05})$) {\t};
+      \draw[edge] ($(s#1.south west)+(0.12,0)$) |- (l#1\k.west);
+    }}
+  \leaves{0}{Select patients (LIDC)}{Download CT (TCIA)}{Cases + patient split}{Simulate 15-view DTS}
+  \leaves{1}{Whole-chest SIRT}{Depth support}{Prism ROI-SIRT}{Background removal}
+  \leaves{2}{Conditional diffusion prior}{SIRT data consistency}{Nodule detector}{Fit check}
+  \leaves{3}{3D Gaussians}{Mass, volume, diameter}{Conformal intervals}{EUPS category probs.}
+  \leaves{4}{Click-to-3D demo}{Virtual follow-up}{Seen/unseen, saliency}{HTML report}
+\end{tikzpicture}

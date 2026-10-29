@@ -1,0 +1,14 @@
+% Context diagram (DFD level 0), Gane--Sarson notation
+\begin{tikzpicture}
+  \node[mainproc, minimum width=3.6cm, minimum height=2.0cm, text width=3.4cm] (sys) at (0,0)
+       {\textbf{0}\\[2pt] \textbf{MedLift-3D}\\ click-to-3D nodule measurement};
+  \node[entity] (clin) at (-7.3,0) {Clinician\\ (radiologist)};
+  \node[entity] (tcia) at (0,3.4) {TCIA archive\\ (LIDC-IDRI CT + annotations)};
+  \node[entity] (gpu)  at (0,-3.4) {Cloud GPU provider\\ (RunPod, Kaggle)};
+
+  \draw[flow] ([yshift=4mm]clin.east) -- node[flowlbl, above=2pt] {case, click, depth} ([yshift=4mm]sys.west);
+  \draw[flow] ([yshift=-4mm]sys.west) -- node[flowlbl, below=2pt] {mass, volume, 90\% intervals,\\ category probabilities, 3D view} ([yshift=-4mm]clin.east);
+  \draw[flow] (tcia.south) -- node[flowlbl, right=2pt] {CT scans, 4-reader nodule annotations} (sys.north);
+  \draw[flow] ([xshift=-8mm]sys.south) -- node[flowlbl, left=2pt] {training and evaluation jobs} ([xshift=-8mm]gpu.north);
+  \draw[flow] ([xshift=8mm]gpu.north) -- node[flowlbl, right=2pt] {trained models, results} ([xshift=8mm]sys.south);
+\end{tikzpicture}

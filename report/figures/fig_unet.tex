@@ -1,0 +1,70 @@
+% Conditional 3D U-Net of the diffusion prior (medlift3d/diffusion/unet3d.py)
+\begin{tikzpicture}[font=\footnotesize, >=Stealth,
+    res/.style={draw=edge, fill=accentlight, minimum width=#1, inner sep=0pt},
+    att/.style={draw=accent, fill=accent!45, minimum width=0.22cm, inner sep=0pt},
+    down/.style={->, thick, red!65!black},
+    up/.style={->, thick, green!45!black},
+    skip/.style={->, densely dashed, edge},
+    lab/.style={font=\scriptsize, align=center}]
+
+  % level geometry: y centre, block height (resolution), block width (channels)
+  \def\yA{6.0}\def\yB{4.4}\def\yC{2.8}\def\yD{1.2}
+  \def\xe{3.2}\def\xd{10.0}
+
+  % ----- encoder
+  \node[res=0.45cm, minimum height=1.3cm] (e0) at (\xe,\yA) {};
+  \node[res=0.65cm, minimum height=1.0cm] (e1) at (\xe,\yB) {};
+  \node[res=0.85cm, minimum height=0.75cm] (e2) at (\xe,\yC) {};
+  \node[res=0.85cm, minimum height=0.55cm] (e3) at (\xe,\yD) {};
+  \node[att, minimum height=0.55cm, right=0pt of e3] (a3) {};
+  \node[lab, left=4pt of e0] {$2\times$ ResBlock, 32 ch\\ $64{\times}128{\times}64$};
+  \node[lab, left=4pt of e1] {$2\times$ ResBlock, 64 ch\\ $32{\times}64{\times}32$};
+  \node[lab, left=4pt of e2] {$2\times$ ResBlock, 128 ch\\ $16{\times}32{\times}16$};
+  \node[lab, left=4pt of e3] {$2\times$ (ResBlock + attention)\\ 128 ch, $8{\times}16{\times}8$};
+  \draw[down] (e0.south) -- (e1.north);
+  \draw[down] (e1.south) -- (e2.north);
+  \draw[down] (e2.south) -- (e3.north);
+
+  % ----- bottleneck
+  \node[res=0.55cm, minimum height=0.55cm] (m1) at (6.25,-0.2) {};
+  \node[att, minimum height=0.55cm, right=1pt of m1] (ma) {};
+  \node[res=0.55cm, minimum height=0.55cm, right=1pt of ma] (m2) {};
+  \node[lab, below=3pt of ma] {bottleneck: ResBlock -- attention -- ResBlock};
+  \draw[->, thick, edge] (a3.south) |- (m1.west);
+
+  % ----- decoder
+  \node[res=0.85cm, minimum height=0.55cm] (d3) at (\xd,\yD) {};
+  \node[att, minimum height=0.55cm, right=0pt of d3] (b3) {};
+  \node[res=0.85cm, minimum height=0.75cm] (d2) at (\xd,\yC) {};
+  \node[res=0.65cm, minimum height=1.0cm] (d1) at (\xd,\yB) {};
+  \node[res=0.45cm, minimum height=1.3cm] (d0) at (\xd,\yA) {};
+  \draw[->, thick, edge] (m2.east) -| (d3.south);
+  \draw[up] (d3.north) -- (d2.south);
+  \draw[up] (d2.north) -- (d1.south);
+  \draw[up] (d1.north) -- (d0.south);
+  \node[lab, right=4pt of b3] {$3\times$ (ResBlock + attention)};
+  \node[lab, right=4pt of d2] {$3\times$ ResBlock, 128 ch};
+  \node[lab, right=4pt of d1] {$3\times$ ResBlock, 64 ch};
+  \node[lab, right=4pt of d0] {$3\times$ ResBlock, 32 ch};
+
+  % ----- skips
+  \foreach \e/\d in {e0/d0, e1/d1, e2/d2} { \draw[skip] (\e.east) -- node[above, lab, text=quiet]{concatenate} (\d.west); }
+  \draw[skip] (a3.east) -- node[above, lab, text=quiet]{concatenate} (d3.west);
+
+  % ----- input / output
+  \node[draw=edge, fill=white, rounded corners=2pt, lab] (in) at (\xe,8.0) {$\mathbf{x}_t \oplus \mathbf{c}$\\ 2 channels};
+  \draw[->, thick, edge] (in.south) -- node[right, lab]{conv $3^3$} (e0.north);
+  \node[draw=edge, fill=white, rounded corners=2pt, lab] (out) at (\xd,8.0) {$\hat{\mathbf{v}}_\theta$\\ 1 channel};
+  \draw[->, thick, edge] (d0.north) -- node[left, lab]{GN, SiLU, conv $3^3$} (out.south);
+
+  % ----- time embedding
+  \node[draw=edge, fill=white, rounded corners=2pt, lab] (t) at (6.6,8.0) {timestep $t$ $\rightarrow$ sinusoidal + MLP\\ \textcolor{accent}{$\mathbf{e}_t$ added in every ResBlock}};
+
+  % ----- legend
+  \begin{scope}[shift={(0.6,-1.9)}]
+    \node[res=0.35cm, minimum height=0.3cm] at (0,0) {}; \node[lab, anchor=west] at (0.3,0) {ResBlock (GN, SiLU, conv, $+\,\mathbf{e}_t$)};
+    \node[att, minimum height=0.3cm] at (5.4,0) {}; \node[lab, anchor=west] at (5.6,0) {multi-head self-attention};
+    \draw[down] (9.4,0.15) -- (9.4,-0.15); \node[lab, anchor=west] at (9.55,0) {stride-2 conv};
+    \draw[up] (11.8,-0.15) -- (11.8,0.15); \node[lab, anchor=west] at (11.95,0) {upsample + conv};
+  \end{scope}
+\end{tikzpicture}

@@ -1,0 +1,20 @@
+% Seen (range) / unseen (null-space) decomposition and what each reconstruction contributes
+\begin{tikzpicture}[font=\footnotesize, >=Stealth]
+  \draw[->, thick, edge] (0,0) -- (8.2,0) node[below=4pt, anchor=north east, align=right] {seen component $\mathbf{x}_{\mathrm{seen}} \in \mathcal{R}(A^{\!\top})$\\ fixed by the X-rays};
+  \draw[->, thick, edge] (0,0) -- (0,5.2) node[above, align=center] {unseen component $\mathbf{x}_{\mathrm{unseen}} \in \mathcal{N}(A)$\\ (missing wedge)};
+  % data-consistent set
+  \draw[accent, very thick] (5,-0.3) -- (5,4.9);
+  \node[accent, align=left, anchor=west] at (5.15,4.7) {all volumes with $A\mathbf{x} = \mathbf{b}$\\ (agree with the 15 views)};
+  % SIRT / min norm
+  \fill[edge] (5,0) circle (0.11);
+  \node[anchor=south west, align=left] at (5.15,0.12) {SIRT / minimum norm:\\ no unseen content};
+  % truth
+  \node[star, star points=5, fill=red!70!black, inner sep=1.6pt] (gt) at (5,3.1) {};
+  \node[anchor=east, text=red!70!black] at (4.75,3.1) {true CT $\mathbf{x}^\ast$};
+  % prior samples
+  \foreach \y in {2.35,2.6,2.8,2.95,3.25,3.45,3.7,3.95} { \fill[accent!70] (5,\y) circle (0.075); }
+  \draw[decorate, decoration={brace, amplitude=5pt}] (5.35,3.98) -- (5.35,2.32) node[midway, right=7pt, align=left] {8 diffusion samples:\\ unseen content from the prior};
+  % skill annotation
+  \draw[<->, densely dashed, edge] (4.3,0.05) -- (4.3,3.05);
+  \node[anchor=east, align=right, text=quiet] at (4.2,1.55) {unseen skill: does the\\ prior's unseen part\\ correlate with the truth's?};
+\end{tikzpicture}

@@ -1,0 +1,31 @@
+% FYDP-III schedule (weeks of the trimester)
+\begin{ganttchart}[
+    hgrid, vgrid={*{8}{dotted}},
+    x unit=1.15cm, y unit chart=0.52cm,
+    title height=1, title label font=\footnotesize\bfseries,
+    bar/.append style={fill=accentlight, draw=accent},
+    bar label font=\footnotesize, bar height=0.55,
+    group/.append style={fill=edge!70, draw=edge}, group label font=\footnotesize\bfseries,
+    group peaks height=.2, group peaks tip position=0, group left shift=0, group right shift=0, group peaks width=0.2,
+    milestone/.append style={fill=accent, draw=accent}, milestone left shift=-0.5, milestone right shift=-0.5, milestone label font=\footnotesize\itshape,
+    link/.style={->, thick, edge}]{1}{9}
+  \gantttitle{FYDP-III trimester (weeks)}{9} \\
+  \gantttitlelist{1,...,9}{1} \\
+  \ganttgroup{Analysis and design}{1}{3} \\
+  \ganttbar{Problem re-analysis, projection moments}{1}{2} \\
+  \ganttbar{Requirements, design, verification plan}{2}{3} \\
+  \ganttgroup{Implementation}{2}{8} \\
+  \ganttbar[name=phys]{Physics, DTS simulation, unit tests}{2}{4} \\
+  \ganttbar[name=rec]{SIRT, prism ROI, 3D Gaussians}{3}{5} \\
+  \ganttbar[name=dif]{Diffusion prior and training}{4}{6} \\
+  \ganttbar{Detector, conformal UQ, growth}{5}{7} \\
+  \ganttbar{Explainability, demo, HTML report}{6}{8} \\
+  \ganttgroup{Verification and study}{6}{9} \\
+  \ganttbar[name=pilot]{Real-data pilots (4 and 40 patients)}{6}{7} \\
+  \ganttmilestone[name=full]{Full 583-patient run}{8} \\
+  \ganttbar{Report, slides, defense}{8}{9} \\
+  \ganttmilestone{Final submission}{9}
+  \ganttlink{phys}{rec}
+  \ganttlink{rec}{dif}
+  \ganttlink{pilot}{full}
+\end{ganttchart}

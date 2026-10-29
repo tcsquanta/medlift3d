@@ -1,0 +1,71 @@
+\chapter{Introduction}
+\label{ch:intro}
+
+This chapter states the clinical problem that MedLift-3D solves and why it matters. It then lists the objectives as testable hypotheses, summarises the method and its outcomes, and outlines the rest of the report.
+
+\section{Project Overview}
+
+Lung cancer is the leading cause of cancer death worldwide, with about 2.5 million new cases (12.4\% of all cancers) and 1.8 million deaths (18.7\% of cancer deaths) in 2022~\cite{bray2024globocan}. Survival depends strongly on the stage at diagnosis: five-year survival is 70--90\% for stage~I non-small cell lung cancer but only 15--19\% for stage~IV~\cite{knight2017early}. Early lung cancer usually appears as a pulmonary nodule, yet most nodules are benign. Radiologists therefore decide by following a nodule over months and measuring how fast it grows, usually as a volume doubling time (VDT)~\cite{revel2004threed,horeweg2014nelson}.
+
+Computed tomography (CT) is the standard tool for this follow-up, but every scan gives the patient a radiation dose of several millisieverts and costs money and scanner time~\cite{brenner2007ct}. Low-dose CT lowers the dose, yet repeated follow-up still adds up: about four radiation-induced cancers per \num{10000} screened people, most of it from the follow-up scans~\cite{rampinelli2017}. In low-resource settings such as rural Bangladesh, CT is often not available at all.
+
+Digital chest tomosynthesis (DTS) acquires 15--74 low-dose X-ray views during a short tube sweep of about \ang{30}, at roughly \SI{0.1}{mSv}, on equipment that costs far less than CT~\cite{dobbins2003dts}. It finds nodules about three times more often than chest radiography~\cite{vikgren2008}. However, a \ang{30} sweep leaves a \emph{missing wedge} of directions that no X-ray passes through (\cref{fig:dts}), so DTS cannot resolve depth and every 3D size measured from it is partly a guess.
+
+\paragraph{Problem statement.} Given a low-dose chest DTS acquisition and one click on a nodule, produce its 3D mass, volume and growth rate together with an uncertainty that is honest, so that a clinician can follow nodules without repeated CT and knows when a measurement cannot be trusted.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_dts_geometry}}
+  \caption[DTS acquisition geometry and the missing wedge]{Chest DTS acquisition. (a) The X-ray tube moves along a linear track over $\pm15^\circ$ and the nodule's shadow shifts on the detector with the tube angle; this shift is the only depth information. (b) In Fourier space each view measures one plane, so a $\pm15^\circ$ sweep measures only a double wedge around the in-plane axis and leaves the depth frequencies unmeasured.}
+  \label{fig:dts}
+\end{figure}
+
+\section{Motivation}
+
+\paragraph{Clinical importance.} Five-year survival falls from 64\% for localised lung cancer to 9\% for distant disease~\cite{who2023lung,nlst2011}. Growth is the key sign separating malignant from benign nodules, and guidelines act on volume and doubling-time categories: $<100$, 100--300 and $\geq 300$~mm$^3$, and $<400$, 400--600 and $>600$ days~\cite{oudkerk2017eups,horeweg2014nelson}.
+
+\paragraph{Limits of 2D measurement.} Diameters measured on single slices assume a sphere. Volumes estimated from 2D measurements differ from 3D volumetry by 47--85\% on average~\cite{demargerie2018}, 2D measurements of small nodules are unreliable~\cite{revel2004twod}, and a 1~mm change in diameter is a 33\% change in volume~\cite{lee2025volumetry}. Measurement error larger than the true growth delays treatment.
+
+\paragraph{Radiation and access.} CT follow-up means repeated dose and requires well-equipped centres~\cite{mascalchi2017,brenner2007ct}. DTS is cheaper, faster and much lower in dose, but has no trustworthy 3D measurement.
+
+\paragraph{Why existing reconstruction and AI are not enough.} Iterative reconstruction from a \ang{30} sweep smears each nodule 3--5 times longer in depth than in-plane (we measured a median ratio of 3.5 on LIDC nodules). Generative models can fill the missing wedge, but a model that invents anatomy is dangerous for cancer follow-up~\cite{bhadra2021,zhang2025pail}. Published sparse-view methods report image quality (PSNR, SSIM) rather than calibrated clinical numbers, and none is built for DTS geometry.
+
+\paragraph{Computational motivation.} We asked what DTS can \emph{measure}, not only what it can show. A derivation from projection moments (\cref{sec:method}) shows that every DTS view measures a nodule's total excess attenuation, its \emph{mass}, exactly, while its depth extent, which volume needs, is about 15 times worse conditioned for a $\pm15^\circ$ sweep. A system for DTS should therefore report mass first, fill depth with a learned prior that stays consistent with the X-rays, and state how uncertain each number is. Mass growth is already an established CT biomarker that detects growth earlier than volume~\cite{dehoop2010}.
+
+\section{Objectives}
+
+The objectives are stated as testable hypotheses (H1--H6); any of them could turn out false, and \cref{ch:results} reports what we found.
+
+\begin{enumerate}[label=\textbf{O\arabic*}]
+  \item \textbf{Mass-first measurement (H1).} Show, in theory and on data, that nodule mass from DTS has a smaller error than nodule volume.
+  \item \textbf{Learned prior for the missing wedge (H2).} Train a conditional 3D diffusion model that, combined with physics data consistency and 3D Gaussians, reduces volume error compared with physics-only reconstruction.
+  \item \textbf{Calibrated uncertainty (H3, H5).} Give every mass and volume a conformal 90\% prediction interval that reaches its nominal coverage on held-out patients, and give calibrated probabilities of the clinical size categories with coverage in every size group.
+  \item \textbf{Growth (H4).} Measure growth on virtual follow-up scans and test whether mass doubling time (MDT) classifies growth more accurately than VDT.
+  \item \textbf{Explainability (H6).} Show for each nodule which part of the 3D result was measured by the X-rays (seen) and which was supplied by the prior (unseen), and test whether the prior's unseen content recovers the truth rather than inventing it.
+  \item \textbf{Usable system.} Deliver a click-to-3D application with a learned detector that suggests where to click, running on free or low-cost cloud hardware.
+\end{enumerate}
+
+\section{Methodology}
+
+MedLift-3D is evaluated as a virtual clinical trial on real patient CT, because no public dataset has chest DTS together with CT ground truth. \Cref{fig:pipeline} in \cref{ch:design} shows the full pipeline.
+\begin{enumerate}
+  \item \textbf{Data:} 583 LIDC-IDRI patients with \num{1144} nodules of 4--30~mm marked by at least three of four radiologists~\cite{armato2011lidc,hancock2016pylidc}, split by patient 60/20/20 into training, calibration and test sets.
+  \item \textbf{DTS simulation:} 15 low-dose views over $\pm15^\circ$ with Poisson noise, reconstructed by SIRT~\cite{gilbert1972sirt}.
+  \item \textbf{Click and prism:} the clinician, helped by a learned detector, selects a nodule; a 64~mm column through the whole chest (the \emph{prism}) is reconstructed around it.
+  \item \textbf{Diffusion prior:} a 17.4-million-parameter conditional 3D U-Net diffusion model~\cite{ho2020ddpm,song2021ddim,salimans2022v} generates eight CT-like hypotheses of the prism, each kept consistent with the X-rays by SIRT steps inside the sampler.
+  \item \textbf{3D Gaussians:} each hypothesis is fitted with anisotropic 3D Gaussians~\cite{kerbl2023gs,zha2024r2}, which give the nodule's mass in closed form.
+  \item \textbf{Uncertainty:} the spread of the eight hypotheses is calibrated into conformal intervals and predictive distributions on the calibration patients~\cite{vovk2022alrw,vovk2019cps,bostrom2022crepes,angelopoulos2023}.
+  \item \textbf{Explanation:} each result is split into seen and unseen parts by a conjugate-gradient null-space decomposition~\cite{bhadra2021,wang2023ddnm}, and the detector is explained with input$\times$gradient saliency~\cite{shrikumar2017}.
+\end{enumerate}
+
+\section{Project Outcome}
+
+\paragraph{Technical.} A verified, open pipeline of 18 scripted steps, each ending in automatic PASS/FAIL checks, from data download to final tables, figures and an HTML report. The full study runs on one rented GPU in about 14 hours for about US\$16.
+
+\paragraph{Clinical.} A click-to-3D application that returns mass, volume, an EUPS size category with calibrated probabilities and a virtual follow-up, always with intervals instead of single numbers.
+
+\paragraph{Research.} (i) A projection-moment argument that DTS measures mass but not depth extent; (ii) a data-consistent diffusion prior inside a DTS prism combined with Gaussian mass; (iii) calibrated, decision-level uncertainty for DTS volumetry; (iv) a truth-referenced seen/unseen test of what the prior adds. \Cref{sec:gap} states exactly what is and is not new.
+
+\section{Organization of the Report}
+
+\Cref{ch:background} gives the background on DTS, diffusion models, 3D Gaussians, conformal prediction and explainability, reviews similar applications and research, and identifies the gap. \Cref{ch:design} presents the requirements, the context and data flow diagrams, the user interface, the detailed method with the alternatives considered, the project plan and the task allocation. \Cref{ch:results} describes the environment and tools, how each requirement was verified, and the results for H1--H6. \Cref{ch:standards} covers standards; societal, health, safety, legal, cultural, ethical, environmental and sustainability considerations; cost; and the complex engineering problem mapping. \Cref{ch:conclusion} summarises the work, its limitations, future work and what we learned.

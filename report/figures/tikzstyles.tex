@@ -1,0 +1,20 @@
+% Shared TikZ styles for the report diagrams (Gane--Sarson DFD notation)
+\tikzset{
+  entity/.style={draw=edge, fill=physics, minimum width=2.7cm, minimum height=1.1cm, align=center,
+                 font=\footnotesize, double copy shadow={shadow xshift=2pt, shadow yshift=-2pt, draw=edge, fill=physics}},
+  process/.style={draw=edge, fill=white, rounded corners=6pt, minimum width=2.8cm, minimum height=1.25cm,
+                  align=center, font=\footnotesize, text width=2.6cm},
+  mainproc/.style={process, fill=accentlight, draw=accent, thick},
+  flow/.style={->, >=Stealth, edge, thick},
+  flowlbl/.style={font=\scriptsize, align=center, fill=white, inner sep=1pt},
+  leaf/.style={draw=edge, fill=white, minimum width=2.9cm, minimum height=0.75cm, align=center, font=\scriptsize, text width=2.75cm},
+}
+% \datastore{name}{(x,y)}{ID}{label}: open-ended data store
+\newcommand{\datastore}[4]{%
+  \node[minimum width=3.0cm, minimum height=0.7cm, inner sep=0pt] (#1) at #2 {};
+  \draw[edge, thick] (#1.north east) -- (#1.north west) -- (#1.south west) -- (#1.south east);
+  \draw[edge, thick] ($(#1.north west)+(0.6,0)$) -- ($(#1.south west)+(0.6,0)$);
+  \node[font=\scriptsize\bfseries] at ($(#1.west)+(0.3,0)$) {#3};
+  \node[font=\footnotesize] at ($(#1.center)+(0.3,0)$) {#4};}
+% no hyphenation inside diagram nodes
+\tikzset{every node/.append style={execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}}}

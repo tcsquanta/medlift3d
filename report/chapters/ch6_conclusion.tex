@@ -1,0 +1,66 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This chapter summarises what MedLift-3D achieved, states its limitations and future work, and reflects on the independent learning the project required.
+
+\section{Summary}
+
+MedLift-3D turns one click on a low-dose chest tomosynthesis image into a 3D nodule measurement with calibrated uncertainty. We showed from projection moments that DTS measures a nodule's mass in every view but its depth extent about 15 times worse, and built the system around that fact: a prism reconstruction around the click, a 17.4-million-parameter conditional diffusion prior kept consistent with the X-rays, 3D Gaussians that give mass in closed form, conformal intervals and calibrated size-category probabilities, a learned detector to suggest clicks, and a seen/unseen explanation of every result. A verified 18-step pipeline ran a 583-patient virtual clinical trial on LIDC-IDRI in 14 hours for about US\$16. The prior improved nodule-region PSNR from 11.88 to 15.23~dB without overfitting, the detector reached a CPM of 0.298 against 0.017 for a training-free baseline, and every requirement with a fixed criterion passed its check. \fillme{one sentence with the H1--H6 outcomes}
+
+\section{Limitation}
+
+\begin{itemize}
+  \item \textbf{Simulation only.} No public chest DTS dataset with CT ground truth exists; our DTS is simulated from CT with a monochromatic beam and no scatter, so performance on real scanners is unknown.
+  \item \textbf{Acquisition.} 15 views instead of the 60--74 of clinical units (at equal dose) and a conservative \ang{30} sweep; the prior was trained and tested on this geometry only.
+  \item \textbf{Detector sensitivity.} 35\% at two false positives per scan is too low for unaided use; the detector is an aid only.
+  \item \textbf{Growth.} Virtual growth scales the nodule uniformly; real nodules grow irregularly.
+  \item \textbf{Ground truth.} LIDC labels vary between radiologists (consensus volume / mean reader volume 0.81), and only nodules of 4--30~mm marked by at least three readers were used.
+  \item \textbf{Population.} LIDC is mostly from US patients; populations with tuberculosis scarring were not represented.
+  \item \textbf{Training budget.} The prior trained for 6 hours and its held-out loss was still falling, so it is probably under-trained.
+  \item \textbf{Patient thickness} was taken from the CT body outline; a real DTS unit would have to measure it.
+\end{itemize}
+
+\section{Future Work}
+
+\begin{enumerate}
+  \item \textbf{Real DTS data:} partner with a hospital that has a DTS unit to collect paired DTS and CT scans, recalibrate the conformal layer on them, and measure real performance.
+  \item \textbf{Physics realism:} add polychromatic spectra, scatter and the 60--74-view clinical protocols to the simulator.
+  \item \textbf{Longer and larger training:} train the prior longer with augmentation, test larger models, and train the detector with more nodule-free negatives.
+  \item \textbf{Real growth:} use longitudinal CT pairs instead of virtual growth.
+  \item \textbf{Reader study:} measure whether radiologists make better follow-up decisions with MedLift-3D than with DTS alone.
+  \item \textbf{Deployment:} a Bangla interface, DICOM/PACS integration, an on-site GPU option, and a quality system towards regulatory registration.
+  \item \textbf{Other limited-angle problems:} breast tomosynthesis and dental cone-beam CT share the missing-wedge structure.
+\end{enumerate}
+
+\section{Independent Learning and Reflection}
+
+\paragraph{Curiosity.} The project began as a generative-modelling idea, but we kept asking a deeper question: what can a \ang{30} X-ray sweep actually measure? Following that question into projection moments led to the mass-first design. The same curiosity made us ask whether the prior recovers or invents depth, which became the seen/unseen analysis, and when we found that raw ensemble spread is not a probability we studied conformal prediction until we could produce calibrated category probabilities.
+
+\paragraph{Self-initiative.} Beyond the required scope we added a learned detector after the training-free one mostly found vessels, a fit check to show that the prior does not overfit, conformal predictive systems with size-group calibration, explainability with a truth-referenced test, a geometry-sensitivity study to justify the 15-view choice, and an automatic HTML report so that every check is visible to examiners.
+
+\paragraph{Independence.} Outside the classroom we learned to run a 14-hour unattended job on rented cloud machines (CPU and GPU pods sharing a network volume, terminal multiplexing, resumable scripts and backups), to download and organise 64~GB of medical images from TCIA, to read radiologist annotations with pylidc, and to serve a GPU application from a Kaggle notebook through an HTTPS tunnel when the usual share link failed.
+
+\paragraph{Transfer of past learning.} \Cref{tab:transfer} shows how earlier coursework was applied.
+
+\begin{table}[htbp]
+\centering\small
+\caption{Earlier coursework applied in MedLift-3D.}
+\label{tab:transfer}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}X}
+\toprule
+Earlier course knowledge & Application in MedLift-3D \\
+\midrule
+Linear algebra (range, null space, least squares) & Seen/unseen split with CGLS; SIRT as an iterative least-squares solver \\
+Calculus and moments & Projection-moment argument: mass is the 0th moment, depth extent the 2nd \\
+Probability and statistics & Poisson noise, conformal prediction, Brier score, rank correlations, bootstrap confidence intervals \\
+Numerical methods & Iterative solvers, numerical stability, mixed precision \\
+Data structures and algorithms & Ray marching, candidate ranking, patient-level splitting \\
+Artificial intelligence and machine learning & Diffusion training, U-Nets, overfitting checks, train/calibration/test discipline \\
+Image processing and computer graphics & Projection geometry, 3D Gaussians, segmentation, saliency maps \\
+Software engineering & Requirements and traceability, unit tests, version control, the verified pipeline \\
+Computer networks & HTTPS tunnels and port forwarding for the application \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Reflection on learning.} Our main lesson was that a large architecture with falling training losses does not show that a single clinical measurement is right. Rebuilding the work around measurable clinical numbers, explicit hypotheses and automatic checks changed how we think about engineering: a result counts only if someone else can verify it, and a negative result reported honestly is worth more than a claim that cannot be tested. We also learned to work within real limits of time, money and data, to plan computation like a budget, and to treat uncertainty as part of the answer rather than an embarrassment. These habits, more than any single model, are what we take from the project into our careers.
