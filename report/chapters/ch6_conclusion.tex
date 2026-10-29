@@ -5,7 +5,7 @@ This chapter summarises what MedLift-3D achieved, states its limitations and fut
 
 \section{Summary}
 
-MedLift-3D turns one click on a low-dose chest tomosynthesis image into a 3D nodule measurement with calibrated uncertainty. We showed from projection moments that DTS measures a nodule's mass in every view but its depth extent about 15 times worse, and built the system around that fact: a prism reconstruction around the click, a 17.4-million-parameter conditional diffusion prior kept consistent with the X-rays, 3D Gaussians that give mass in closed form, conformal intervals and calibrated size-category probabilities, a learned detector to suggest clicks, and a seen/unseen explanation of every result. A verified 18-step pipeline ran a 583-patient virtual clinical trial on LIDC-IDRI in 14 hours for about US\$16. The prior improved nodule-region PSNR from 11.88 to 15.23~dB without overfitting, the detector reached a CPM of 0.298 against 0.017 for a training-free baseline, and every requirement with a fixed criterion passed its check. \fillme{one sentence with the H1--H6 outcomes}
+MedLift-3D turns one click on a low-dose chest tomosynthesis image into a 3D nodule measurement with calibrated uncertainty. We showed from projection moments that DTS measures a nodule's mass in every view but its depth extent about 15 times worse, and built the system around that fact: a prism reconstruction around the click, a 17.4-million-parameter conditional diffusion prior kept consistent with the X-rays, 3D Gaussians that give mass in closed form, conformal intervals and calibrated size-category probabilities, a learned detector to suggest clicks, and a seen/unseen explanation of every result. A verified 18-step pipeline ran a 583-patient virtual clinical trial on LIDC-IDRI in 14 hours for about US\$16. The components worked as specified: the prior improved nodule-region PSNR from 11.88 to 15.23~dB on held-out data, the detector reached a CPM of 0.298 against 0.017 for a training-free baseline, conformal intervals reached their target coverage, calibrated probabilities lowered the Brier score for $P(V\geq100)$ from 0.54 to 0.17, and the null-space analysis showed that the X-rays measure almost all of a nodule's mass and that the prior's unseen content correlates with the truth. The measurements did not reach the goal: mass was not more accurate than volume (H1), the full method did not beat physics-only reconstruction (H2), MDT did not beat VDT for our method (H4), and the valid intervals were too wide to be useful (H3). Calibrated probabilities (H5) helped at one of two thresholds, and the prior's positive unseen skill supports H6. The analysis traced the failures to specific causes with specific fixes, and showed that better image quality did not mean better measurement, which is itself a lesson for medical generative AI.
 
 \section{Limitation}
 
@@ -16,13 +16,19 @@ MedLift-3D turns one click on a low-dose chest tomosynthesis image into a 3D nod
   \item \textbf{Growth.} Virtual growth scales the nodule uniformly; real nodules grow irregularly.
   \item \textbf{Ground truth.} LIDC labels vary between radiologists (consensus volume / mean reader volume 0.81), and only nodules of 4--30~mm marked by at least three readers were used.
   \item \textbf{Population.} LIDC is mostly from US patients; populations with tuberculosis scarring were not represented.
-  \item \textbf{Training budget.} The prior trained for 6 hours and its held-out loss was still falling, so it is probably under-trained.
+  \item \textbf{Measurement accuracy.} Volume and mass errors (MdAPE 75--100\%) are far from clinical use; the full method under-estimates strongly (bias $-91\%$) and fails on 22\% of nodules.
+  \item \textbf{Uninformative intervals.} Failed measurements inside the calibration set made the intervals valid but unbounded; the ensemble spread was negatively correlated with the error.
+  \item \textbf{Training budget and size.} The prior trained for 6 hours and was still improving, and its samples were better for training patients than for new ones (+7.00 vs +4.22~dB); the detector also partly memorised its training patients.
+  \item \textbf{Sample size.} Measurements used 150 nodules (76 calibration, 74 test) and 40 growth pairs, so small differences between methods are not conclusive.
   \item \textbf{Patient thickness} was taken from the CT body outline; a real DTS unit would have to measure it.
 \end{itemize}
 
 \section{Future Work}
 
 \begin{enumerate}
+  \item \textbf{Nodule-preserving prior:} condition the diffusion model on the click position and oversample nodule pairs, so that faint nodules are not replaced by normal lung.
+  \item \textbf{Projection-domain mass:} estimate mass by integrating the detector signal around the nodule's shadow, which the null-space analysis shows is fully measured, instead of integrating a segmented reconstruction.
+  \item \textbf{Failure-aware calibration:} report ``not measurable'' as a separate outcome with its own probability and calibrate intervals on measurable cases only, and replace the ensemble spread by a difficulty score that correlates positively with error.
   \item \textbf{Real DTS data:} partner with a hospital that has a DTS unit to collect paired DTS and CT scans, recalibrate the conformal layer on them, and measure real performance.
   \item \textbf{Physics realism:} add polychromatic spectra, scatter and the 60--74-view clinical protocols to the simulator.
   \item \textbf{Longer and larger training:} train the prior longer with augmentation, test larger models, and train the detector with more nodule-free negatives.

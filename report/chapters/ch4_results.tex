@@ -73,7 +73,11 @@ Git, GitHub & Version control & Team collaboration \\
 
 \paragraph{Preprocessing.} About 64~GB of DICOM was downloaded from TCIA and converted into one compact case file per scan: the CT in Hounsfield units (clipped to $[-1024, 3071]$ and stored as 16-bit integers), the consensus and reader masks of every nodule (bit-packed), and a header with the voxel geometry and patient ID, after which the DICOM was deleted. The CT table was removed by keeping the largest connected body component, because a table would not be present in a chest DTS acquisition. We verified that the DICOM slice positions agree with pylidc's for every scan (difference 0.000~mm), that the consensus masks lie on nodule tissue (median $-202$~HU) and that the consensus volume is on average 0.81 of the mean reader volume.
 
-\paragraph{DTS simulation and training pairs.} For each case, 15 projections over $\pm15^\circ$ were simulated at CT resolution with Poisson noise ($I_0 = 2\times10^4$ photons per pixel and view; median single-view nodule contrast-to-noise ratio 3.3) and reconstructed by whole-chest SIRT. Training pairs for the diffusion prior were cut from the training patients only: for each pair, the prism SIRT of the DTS is the condition and the same prism of the CT is the target, taken around nodules and around nodule-free lung regions so that the prior also learns normal anatomy. \fillme{number of training pairs (nodule and nodule-free) from logs/07\_*.log}
+\paragraph{DTS simulation and training pairs.} For each case, 15 projections over $\pm15^\circ$ were simulated at CT resolution with Poisson noise ($I_0 = 2\times10^4$ photons per pixel and view; median single-view nodule contrast-to-noise ratio 3.3) and reconstructed by whole-chest SIRT. Training pairs for the diffusion prior were cut from the training patients only: for each pair, the prism SIRT of the DTS is the condition and the same prism of the CT is the target, taken around nodules and around nodule-free lung regions so that the prior also learns normal anatomy. This gave \num{2522} training pairs and 265 held-out pairs from the training patients; the condition kept the prism's attenuation (median ratio to CT 0.956, 10--90\%: 0.85--1.03), and its PSNR against the CT target was 10.66~dB, the baseline the prior must beat. \Cref{fig:dtsviews} shows the simulated views and the SIRT reconstruction of one patient and \cref{fig:pair} one training pair.
+
+\resultfig{dts_views.png}{The 15 simulated low-dose views of one patient (LIDC-IDRI-0003); the red circle marks a nodule, whose shadow shifts with the tube angle.}{fig:dtsviews}
+\resultfig{dts_sirt.png}{Whole-chest SIRT of the same patient: sharp in the coronal (DTS) plane, smeared in depth (sagittal).}{fig:dtssirt}
+\resultfig[0.7\linewidth]{training_pair.png}{A training pair: DTS prism (condition, top) and CT prism (target, bottom), coronal and sagittal views.}{fig:pair}
 
 \Cref{tab:data} summarises the dataset.
 
@@ -90,13 +94,17 @@ LIDC-IDRI patients ($\geq$1 nodule of 4--30~mm marked by $\geq$3 readers, slices
 Nodules & \num{1144} \\
 Train / calibration / test patients & 350 / 117 / 116 \\
 Test nodules (detector evaluation) & 225 in 116 scans \\
-Nodules measured in step 09 & \fillme{cal / test} \\
+Nodules measured in step 09 (cal / test) & 76 / 74 \\
+Diffusion training / held-out pairs & \num{2522} / 265 \\
+Radiologists' volume disagreement (median CV) & 15\% \\
 Consensus volume / mean reader volume & 0.81 \\
 Single-view nodule contrast-to-noise ratio (median) & 3.3 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table}
+
+\resultfig{dataset_nodule_sizes.png}{Size of the 150 measured nodules (calibration and test): consensus volume (left) and diameter (right).}{fig:sizes}
 
 \section{Testing and Evaluation}
 
@@ -119,9 +127,8 @@ This section describes how the system was tested, how the data were split, which
 
 \subsection{Requirement Verification}
 
-Each requirement in \cref{tab:fr,tab:nfr} was checked by the step named in its last column; the check prints the measured value next to the expected one. \Cref{tab:verify} lists every requirement with its measured result. Thirteen of the sixteen rows are met by automatic checks; the three rows that depend on the measurement results (FR-07, FR-08 and FR-09) are completed in \cref{sec:resultsdisc}.
+Each requirement in \cref{tab:fr,tab:nfr} was checked by the step named in its last column; the check prints the measured value next to the expected one. \Cref{tab:verify} lists every requirement with its measured result. Fifteen of the sixteen rows are met. FR-08 is met for coverage but only partly for the Brier score, and the measurement accuracy itself, which no single requirement fixes, is discussed with the hypotheses in \cref{sec:resultsdisc}.
 
- \Cref{tab:verify} traces every requirement of \cref{tab:fr,tab:nfr} to its measured result.
 
 {\small
 \begin{longtable}{>{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}p{1.3cm}}
@@ -138,14 +145,14 @@ FR-01 & Positions agree; splits disjoint & DICOM vs pylidc slice positions 0.000
 FR-02 & Integral = mass within 0.1\% & 0.03\% in all 15 views; deeper object of equal mass indistinguishable & Yes \\
 FR-03 & Residual $<0.9$; depth/in-plane $>1.3$ & Residual 0.02--0.03 of start; depth smear 2--3.5$\times$ & Yes \\
 FR-04 & Learned CPM $>$ baseline & 0.298 vs 0.017 & Yes \\
-FR-05 & Prism keeps column attenuation & 98.7\% after the depth-support fix & Yes \\
+FR-05 & Prism keeps column attenuation & Median 0.956 of the CT (10--90\%: 0.85--1.03) over all training pairs & Yes \\
 FR-06 & Samples beat physics input & Nodule-box PSNR 15.23 vs 11.88~dB (+3.35~dB) & Yes \\
-FR-07 & Finite values; failures reported & \fillme{failure rate per method from table\_accuracy} & \fillme{} \\
-FR-08 & Coverage $90\pm3\%$; Brier $<$ vote & \fillme{from table\_uq\_intervals and table\_uq\_risk} & \fillme{} \\
-FR-09 & Growth metrics reported & \fillme{from table\_growth} & \fillme{} \\
+FR-07 & Finite values; failures reported & 150 nodules processed without errors; failure rates reported per method (3--46\%, \cref{tab:accuracy}) & Yes \\
+FR-08 & Coverage $90\pm3\%$; Brier $<$ vote & Coverage 95\% (volume and mass); Brier 0.174--0.234 vs 0.543 for $P(V\geq100)$, 0.284 vs 0.291 for $P(V\geq300)$ & Partly \\
+FR-09 & Growth metrics reported & Category accuracy, doubling-time error and false alarms for 40 pairs (\cref{tab:growth}) & Yes \\
 FR-10 & Explanation outputs & Seen/unseen, saliency and error-driver tables on 30 test nodules & Yes \\
 FR-11 & Demo self-test; report & Demo served from Kaggle; HTML report with 13 checked steps & Yes \\
-NFR-01 & $\leq 60$~s per nodule & 40--50~s per nodule for all five methods together on the L40S & Yes \\
+NFR-01 & $\leq 60$~s per nodule & Median 45.5~s per nodule for all five methods together on the L40S & Yes \\
 NFR-02 & $\leq$ US\$50 & about US\$16 for the full run & Yes \\
 NFR-03 & Reproducible, checkable & Fixed seed, one configuration, 69 tests, PASS/FAIL logs & Yes \\
 NFR-04 & No optimistic bias & Test patients unused until final tables; separate simulation and reconstruction grids & Yes \\
@@ -155,18 +162,19 @@ NFR-05 & No bare numbers & Every value has an interval and a low-confidence flag
 }
 
 \subsection{Issues Found and Fixed}
- (1) Without a depth support, SIRT placed attenuation in the air around the patient and the prism lost a third of its attenuation as false background; fixed by confining SIRT to the patient. (2) The training-free detector mostly found end-on vessels (recall in the top 10 of 6\% in the pilot); replaced by the learned detector. (3) A first CPS implementation capped probabilities at $n/(n+1)$; fixed with the smoothed mid-point p-value and verified against crepes. (4) In step~10 the asymmetric split-conformal upper bound for some methods became effectively unbounded because calibration nodules where a method found nothing (measured volume $\approx 0$) produce unbounded log-ratios. \fillme{state the resolution: failed measurements excluded from calibration and reported as failures, or step-16 CPS intervals used instead} (5) The HTML report lists three failed checks. \fillme{name and explain the three failed checks}
+ (1) Without a depth support, SIRT placed attenuation in the air around the patient and the prism lost a third of its attenuation as false background; fixed by confining SIRT to the patient. (2) The training-free detector mostly found end-on vessels (recall in the top 10 of 6\% in the pilot); replaced by the learned detector. (3) A first CPS implementation capped probabilities at $n/(n+1)$; fixed with the smoothed mid-point p-value and verified against crepes. (4) In step~10 the asymmetric split-conformal upper bound for some methods became effectively unbounded because calibration nodules where a method found nothing (measured volume $\approx 0$) produce unbounded log-ratios. This is not fixed in the reported results; its effect on the interval widths is analysed in \cref{sec:resultsdisc}, and the fix (calibrating only measurable cases) is listed as future work. (5) Three checks of the full run failed and are reported, not hidden: the H1 and H2 checks of step~10 (the hypotheses were not supported) and the virtual-growth construction check of step~11 (7.5\% deviation against a 3\% limit, caused by vessels near the nodule inside the mass window).
 
 \section{Results and Discussion}
 \label{sec:resultsdisc}
 
-The results are presented in the order of the pipeline: the training and fit of the diffusion prior, nodule detection, measurement accuracy (H1, H2), calibrated uncertainty (H3, H5), growth (H4) and explainability (H6), followed by the sensitivity to the acquisition geometry and the run time and cost of the full study.
+The results are presented in the order of the pipeline: the training and fit of the diffusion prior, nodule detection, measurement accuracy (H1, H2), calibrated uncertainty (H3, H5), growth (H4) and explainability (H6), followed by a discussion of why the measurements failed, the sensitivity to the acquisition geometry, and the run time and cost. The measurement results use 150 nodules (76 calibration, 74 test); detection uses all 225 test nodules.
 
 \subsection{Diffusion Prior Training and Fit}
 
-Training ran for \num{27610} steps within its 6-hour budget (batch 8, about 0.77~s per step). The loss fell from 0.1186 to 0.0476 (mean over the last 10\% vs the first 10\% of steps). On held-out training pairs the prior's samples reached 15.23~dB PSNR in the nodule box against 11.88~dB for the physics-only input (+3.35~dB), and 13.74 vs 10.16~dB over the whole prism including the chest walls. At fixed noise levels the denoising loss was 0.0340 on training pairs and 0.0329 on held-out pairs, a ratio of 0.97, so the model did not overfit (\cref{fig:fit}). Its held-out loss was still falling at the end of the budget, so longer training would probably help.
+The prior was trained on \num{2522} pairs (265 held out) for \num{27610} steps within its 6-hour budget (batch 8, about 0.77~s per step); the loss fell from 0.1186 to 0.0476 (last 10\% vs first 10\% of steps). On held-out pairs its samples reached 15.23~dB PSNR in the nodule box against 11.88~dB for the physics-only input (+3.35~dB) and 13.74 vs 10.16~dB over the whole prism (\cref{fig:sample}). The fit check (\cref{fig:fit}) gives two messages. The denoising loss at fixed noise levels was nearly the same on training and held-out pairs (0.0342 vs 0.0331, ratio 0.97), so the network did not memorise its inputs; but the sample quality gain was larger on training patients than on held-out ones (+7.00 vs +4.22~dB), so its samples are better for patients it has seen. The held-out gain was still rising at the end (+1.89 to +3.35~dB over the last checks), so the prior is also under-trained.
 
-\resultfig{fit_curves.png}{Denoising loss at fixed noise levels on training and held-out pairs during training (step 15).}{fig:fit}
+\resultfig{diffusion_sample.png}{A held-out training pair at the end of training: DTS condition (top), diffusion sample (middle) and CT (bottom), coronal and sagittal (depth) views. The sample has realistic anatomy and sharp depth structure.}{fig:sample}
+\resultfig{fit_curves.png}{Fit check (step 15): training loss and validation of the diffusion prior (top) and of the detector (bottom).}{fig:fit}
 
 \subsection{Nodule Detection}
 
@@ -187,70 +195,181 @@ Learned, in-plane position only (diagnostic) & 0.300 & 28\% / 35\% / 40\% / 47\%
 \end{adjustbox}
 \end{table}
 
-The learned detector is 17 times better than the training-free baseline by CPM (\cref{tab:detection}). The in-plane-only row is almost identical, so the misses are not suggestions at the wrong depth but nodules that a DTS view does not separate from vessels and chest wall. A sensitivity of 35\% at two false positives per scan is far below CT detectors, which is why the detector only suggests and the clinician can click anywhere.
+The learned detector is 17 times better than the training-free baseline by CPM (\cref{tab:detection,fig:froc}). The in-plane-only row is almost identical, so its misses are not suggestions at the wrong depth but nodules that a DTS view does not separate from vessels and chest wall. Its validation CPM had reached a plateau (0.304 at step \num{6000}), but it scored 0.484 on training patients against 0.329 on calibration patients, so it partly memorised its 350 training patients; more patients, not more steps, would help. A sensitivity of 35\% at two false positives per scan is far below CT detectors, which is why the detector only suggests and the clinician can click anywhere.
 
 \resultfig[0.7\linewidth]{froc_test.png}{FROC curves of the learned and training-free detectors on the test patients (step 14).}{fig:froc}
 
 \subsection{Measurement Accuracy (H1, H2)}
 
-Each test nodule was measured by six methods: the clinical 2D diameter converted to a sphere volume, the coarse whole-chest SIRT, the prism ROI-SIRT, physics-only Gaussians, the diffusion prior without Gaussians, and the full method (diffusion prior with Gaussians). Volumes are compared with the radiologists' consensus volume and masses with the CT mass inside the consensus mask plus a 1~mm rim. We report the median absolute percentage error (MdAPE), which is robust to the few very large errors on tiny nodules, the median signed error (bias), and the failure rate, the share of nodules where a method found nothing at the click (volume $\leq 1$~mm$^3$). H1 is supported if mass has a smaller MdAPE than volume for the reconstruction methods; H2 is supported if the full method has a smaller volume MdAPE than the physics-only methods.
-
+Each test nodule was measured by six methods: the clinical 2D diameter converted to a sphere volume, the coarse whole-chest SIRT, the prism ROI-SIRT, physics-only Gaussians, the diffusion prior without Gaussians, and the full method (diffusion prior with Gaussians). Volumes are compared with the radiologists' consensus volume and masses with the CT mass inside the consensus mask plus a 1~mm rim. \Cref{tab:accuracy} reports the failure rate (nothing found at the click), the median signed error (bias) and the median absolute percentage error (MdAPE), in which a failure counts as a 100\% error.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Measurement error on test nodules against the radiologist consensus. \fillme{copy from outputs/10\_evaluation/table\_accuracy.md}}
+\caption{Measurement error on the 74 test nodules (step 10). A failure counts as 100\% error in the MdAPE.}
 \label{tab:accuracy}
 \begin{adjustbox}{max width=\linewidth}
-\begin{tabular}{lccc}
+\begin{tabular}{l cccc ccc c}
 \toprule
-Method & Volume MdAPE & Mass MdAPE & Failure rate \\
+ & \multicolumn{4}{c}{Volume} & \multicolumn{3}{c}{Mass} & \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-8}
+Method & Failed & Bias & MdAPE & Within $\pm$20\% & Failed & Bias & MdAPE & Box PSNR \\
 \midrule
-2D diameter $\rightarrow$ sphere & \fillme{} & -- & \fillme{} \\
-Coarse SIRT & \fillme{} & \fillme{} & \fillme{} \\
-Prism ROI-SIRT & \fillme{} & \fillme{} & \fillme{} \\
-Physics-only Gaussians & \fillme{} & \fillme{} & \fillme{} \\
-Diffusion & \fillme{} & \fillme{} & \fillme{} \\
-Diffusion + Gaussians (ours) & \fillme{} & \fillme{} & \fillme{} \\
+2D diameter $\rightarrow$ sphere (clinical) & 15\% & $-44\%$ & 88.0\% & 7\% & -- & -- & -- & -- \\
+Coarse DTS SIRT & 46\% & $-61\%$ & 100.0\% & 5\% & 46\% & $-66\%$ & 100.0\% & 12.28 \\
+Prism ROI-SIRT (physics) & 15\% & $+10\%$ & 91.2\% & \textbf{14\%} & 16\% & $+8\%$ & 100.0\% & 12.14 \\
+Physics-only Gaussians & 7\% & $-82\%$ & 87.7\% & 3\% & 7\% & $-43\%$ & \textbf{78.0\%} & 11.99 \\
+Diffusion only & \textbf{3\%} & $-58\%$ & \textbf{74.5\%} & 9\% & 36\% & $-82\%$ & 100.0\% & \textbf{17.49} \\
+Diffusion + Gaussians (ours) & 22\% & $-91\%$ & 94.6\% & 4\% & 22\% & $-87\%$ & 97.3\% & 14.72 \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table}
 
-\textbf{H1} (mass error $<$ volume error): \fillme{supported or not, with numbers}. \textbf{H2} (the prior reduces volume error compared with physics-only reconstruction): \fillme{supported or not, with numbers}. \fillme{discuss small vs large nodules and the Bland--Altman bias}
+\textbf{H1 (mass error $<$ volume error) is not supported.} Mass had a lower MdAPE than volume only for the physics-only Gaussians (78.0\% vs 87.7\%); for the other methods it was equal or worse. \textbf{H2 (the prior reduces volume error) is not supported for the full method}: diffusion with Gaussians had a volume MdAPE of 94.6\% against 87.7--91.2\% for the physics-only methods. The diffusion prior alone had the lowest volume MdAPE (74.5\%) and the fewest failures (3\%), but a strong negative bias ($-58\%$). No method reached clinically useful accuracy: even the best had only 14\% of nodules within $\pm$20\%, and the clinical 2D baseline had an MdAPE of 88\%. For comparison, the radiologists' own volumes differ by a median coefficient of variation of 15\%.
 
-\resultfig{volume_errors.png}{Volume error of each method against the radiologist consensus on test nodules (step 10).}{fig:volerr}
-\resultfig{bland_altman_volume.png}{Bland--Altman plot of volume for the best method (step 10).}{fig:ba}
+Two observations explain these numbers. First, image quality and measurement accuracy disagree: the diffusion prior raised the nodule-box PSNR from about 12~dB to 17.49~dB, yet its volumes are the most biased. Second, all learned methods \emph{under}-estimate: \cref{fig:volerr,fig:scatter} show most diffusion and Gaussian estimates far below the line of identity, and \cref{fig:ba} shows that the full method's errors cluster at $-100\%$ (nodules shrunk or erased) with a few large over-estimates. \Cref{fig:h1} shows the error distributions of volume and mass side by side and the volume error against nodule size: errors are large at every size.
+
+\resultfig{volume_errors.png}{Volume error of each method against the radiologist consensus on the test nodules (step 10).}{fig:volerr}
+\resultfig[0.7\linewidth]{volume_scatter.png}{Estimated vs consensus volume for all methods (test nodules); failures are shown at $10^{-3}$~mm$^3$.}{fig:scatter}
+\resultfig[0.7\linewidth]{bland_altman_volume.png}{Bland--Altman plot of volume for diffusion with Gaussians (test nodules).}{fig:ba}
+\resultfig{error_mass_vs_volume.png}{Left: absolute error of volume (V) and mass (M) for each method (test nodules, failures excluded). Right: volume error against nodule size.}{fig:h1}
 
 \subsection{Calibrated Uncertainty (H3, H5)}
 
-\fillme{copy outputs/16\_uncertainty/table\_uq\_intervals.md, table\_uq\_groups.md and table\_uq\_risk.md: test coverage of the 90\% intervals for mass and volume (target 87--93\%), median width, coverage per size group with and without Mondrian, Brier score and ECE of the EUPS probabilities against the raw ensemble vote}
+\Cref{tab:uq} gives the conformal intervals of the full method. All variants calibrated on the 76 calibration nodules reach or exceed the 90\% target coverage on the test nodules except the Mondrian variant for volume, so the coverage guarantee of conformal prediction held in practice (\cref{fig:coverage}). The raw ensemble spread, used as $\pm z$ standard deviations, covered only 28\% at the 90\% level. \textbf{However, the intervals are not informative.} Their median width is many orders of magnitude larger than the estimate, and the normalised variants are effectively unbounded. The reason is the failures: a measurement of zero gives an infinite log-error, so with 22--26\% failures among the calibration nodules the conformal quantile lands on infinite scores. The Mondrian variant is the only one with finite widths, at about 58 times the estimate. H3 is therefore supported for validity (coverage) but not for usefulness (width), and its sub-claim that mass intervals are narrower than volume intervals cannot be assessed with unbounded widths.
 
-\textbf{H3}: \fillme{}. \textbf{H5}: \fillme{}.
+\begin{table}[!htbp]
+\centering\small
+\caption{Conformal 90\% intervals of diffusion with Gaussians on the 74 test nodules (step 16). Width = (upper $-$ lower) / estimate.}
+\label{tab:uq}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{l ccc ccc}
+\toprule
+ & \multicolumn{3}{c}{Volume} & \multicolumn{3}{c}{Mass} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Variant & Coverage & Median width & Worst size group & Coverage & Median width & Worst size group \\
+\midrule
+Standard & 96\% & $1.2\times10^{8}\%$ & 88\% & 96\% & $5.1\times10^{7}\%$ & 89\% \\
+Normalised by ensemble spread & 95\% & unbounded & 82\% & 95\% & unbounded & 89\% \\
+Mondrian size groups & 78\% & \textbf{5784\%} & 67\% & 92\% & \textbf{6208\%} & 89\% \\
+Mondrian + normalised & 88\% & $4.9\times10^{6}\%$ & 79\% & 97\% & $3.2\times10^{7}\%$ & \textbf{96\%} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
-\resultfig{volume_uq_overview.png}{Uncertainty overview for volume: prediction intervals, regression with uncertainty, residuals and interval widths (step 16).}{fig:uq}
-\resultfig[0.75\linewidth]{reliability.png}{Reliability diagram of the calibrated EUPS category probabilities against the raw ensemble vote (step 16).}{fig:reliability}
+\begin{table}[!htbp]
+\centering\small
+\caption{EUPS category probabilities on the test nodules (step 16). Lower Brier score and ECE are better.}
+\label{tab:risk}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{l ccccc}
+\toprule
+Probabilities from & \makecell{Brier\\$P(V\geq100)$} & \makecell{ECE\\$P(V\geq100)$} & \makecell{Brier\\$P(V\geq300)$} & \makecell{ECE\\$P(V\geq300)$} & \makecell{Most likely\\category correct} \\
+\midrule
+Conformal (normalised) & 0.234 & 0.206 & \textbf{0.284} & \textbf{0.236} & \textbf{38\%} \\
+Conformal (Mondrian + normalised) & \textbf{0.174} & \textbf{0.115} & 0.336 & 0.257 & \textbf{38\%} \\
+Ensemble vote (uncalibrated) & 0.543 & 0.583 & 0.291 & 0.253 & 26\% \\
+Ensemble spread as log-normal (uncalibrated) & 0.526 & 0.561 & 0.295 & 0.275 & 27\% \\
+Point estimate only (0/1) & 0.635 & 0.635 & 0.324 & 0.324 & 27\% \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\textbf{H5 is partly supported.} Calibration clearly helped the probability that a nodule is at least 100~mm$^3$: the Brier score fell from 0.543 (raw vote) to 0.174 and the ECE from 0.583 to 0.115 (\cref{tab:risk,fig:reliability}), and the most likely category was right for 38\% of nodules instead of 26\%. For the 300~mm$^3$ threshold calibration made almost no difference (0.284 vs 0.291). The category sets from the 90\% intervals contained the true category for 99\% of nodules but held 2.91 of the 3 categories on average, again valid but uninformative. Mondrian calibration raised the worst size-group coverage for mass from 89\% to 96\% but not for volume (82\% to 79\%; \cref{fig:groups}), so size-conditional coverage was achieved for mass only.
+
+\resultfig[0.7\linewidth]{volume_coverage_levels.png}{Observed coverage at every nominal level for the volume intervals (test nodules): conformal intervals lie on or above the diagonal, the raw ensemble spread far below it.}{fig:coverage}
+\resultfig{reliability.png}{Reliability diagrams of the EUPS category probabilities for $P(V\geq100)$ and $P(V\geq300)$ (test nodules).}{fig:reliability}
+\resultfig[0.75\linewidth]{group_coverage.png}{Coverage of the volume intervals in three size groups, with and without Mondrian calibration.}{fig:groups}
 
 \subsection{Growth (H4)}
 
-For the growth experiment each test nodule was enlarged inside the CT by a known factor, corresponding to a known true doubling time, and a follow-up DTS acquisition was simulated with fresh noise. Both acquisitions were measured with the same method, and VDT and MDT were computed from the volume and mass ratios and assigned to the NELSON categories ($<400$, 400--600 and $>600$ days). We report the median absolute error of the doubling times and the accuracy of the category assignment.
+For the growth experiment each nodule was enlarged inside the CT by a known factor, corresponding to a known true doubling time, and a follow-up DTS acquisition was simulated with fresh noise; 40 growth pairs were evaluated. VDT and MDT were computed from the volume and mass ratios and assigned to the NELSON categories ($<400$, 400--600 and $>600$ days).
 
+\begin{table}[!htbp]
+\centering\small
+\caption{Doubling-time results on 40 virtual growth pairs (step 11).}
+\label{tab:growth}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{ll cccc}
+\toprule
+Method & Quantity & \makecell{Category\\accuracy} & \makecell{Median $|\log_2(\mathrm{DT}_{\mathrm{est}}/\mathrm{DT}_{\mathrm{true}})|$\\(growing)} & \makecell{False growth\\alarms (stable)} & \makecell{Not\\measurable} \\
+\midrule
+Coarse SIRT & VDT / MDT & 35\% / 32\% & 2.14 / 0.88 & 0\% / 0\% & 35\% / 35\% \\
+Prism ROI-SIRT & VDT / MDT & 48\% / \textbf{50\%} & 0.82 / \textbf{0.77} & 10\% / \textbf{0\%} & 18\% / 18\% \\
+Physics-only Gaussians & VDT / MDT & 42\% / 40\% & 1.13 / 1.29 & 20\% / 20\% & 10\% / 10\% \\
+Diffusion only & VDT / MDT & 48\% / 28\% & 0.91 / 0.96 & 30\% / 30\% & 5\% / 48\% \\
+Diffusion + Gaussians (ours) & VDT / MDT & 30\% / 30\% & 1.23 / 1.11 & 10\% / 20\% & 40\% / 40\% \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
-\fillme{copy outputs/11\_growth/table\_growth.md: VDT and MDT errors and NELSON category accuracy}
+\textbf{H4 is not supported for our method} (MDT and VDT both 30\% category accuracy, with 40\% of pairs not measurable). For the physics-only prism reconstruction, MDT was slightly better than VDT (50\% vs 48\% accuracy, doubling-time error 0.77 vs 0.82 in $\log_2$ units, no false growth alarms), and for the coarse SIRT the MDT error was much smaller than the VDT error (0.88 vs 2.14), in line with the mass-first argument; but these differences are small for 40 pairs. One verification check of this step failed: the mass added by the virtual growth deviated from its intended value by up to 7.5\% (limit 3\%), because the mass window also contains nearby vessels; the growth results are therefore indicative only. \Cref{fig:growth} shows estimated against true doubling times.
 
-\textbf{H4} (MDT classifies growth better than VDT): \fillme{}.
-
-\resultfig[0.75\linewidth]{doubling_time.png}{Measured vs true doubling time on virtual follow-up scans (step 11).}{fig:growth}
+\resultfig[0.65\linewidth]{doubling_time.png}{Estimated vs true doubling time for diffusion with Gaussians (VDT and MDT).}{fig:growth}
 
 \subsection{Explainability (H6)}
 
-\fillme{copy outputs/17\_explain/table\_explain.md and table\_error\_drivers.md: fraction of nodule mass in the seen part, fraction of shape in the unseen part, unseen skill of the prior with 95\% CI, Spearman correlations of error with size, depth and contrast}
+\begin{table}[!htbp]
+\centering\small
+\caption{Seen/unseen analysis inside the nodule box, median [IQR] over 30 test nodules (step 17). Unseen skill: 1 = the invisible part matches the truth, 0 = no better than leaving it out, $<0$ = invented structure.}
+\label{tab:explain}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{l cccc}
+\toprule
+Volume & \makecell{Unseen share of\\box signal} & \makecell{Unseen share of\\box mass} & \makecell{Unseen skill\\vs truth} & \makecell{Seen skill\\vs truth} \\
+\midrule
+CT truth & 0.15 [0.09, 0.27] & 0.00 [0.00, 0.00] & -- & -- \\
+Prism ROI-SIRT (physics) & 0.00 [0.00, 0.00] & 0.00 [0.00, 0.00] & 0.00 [0.00, 0.01] & 0.39 [0.19, 0.56] \\
+Diffusion (mean of samples) & 0.09 [0.05, 0.15] & 0.00 [0.00, 0.00] & \textbf{0.22 [0.14, 0.36]} & \textbf{0.88 [0.75, 0.93]} \\
+Diffusion + Gaussians (ours) & 0.04 [0.02, 0.07] & 0.00 [0.00, 0.00] & 0.09 [0.03, 0.19] & 0.59 [0.39, 0.74] \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
-For the detector, the share of input$\times$gradient saliency within 10~mm of the suggestion was 0.15 for true positives and 0.16 for false positives: the detector looks at the local region in both cases, and false positives are caused by local structures that resemble nodules (vessels seen end-on), not by attention far from the candidate.
+The split itself is accurate (median $|A\mathbf{x}_{\text{unseen}}|/|A\mathbf{x}| = 0.002$). \textbf{The analysis confirms the physics behind H1}: only 0.3\% of the true nodule's mass lies in the unseen part, while 15\% of the nodule-box signal (its shape in depth) is invisible to the 15 views. \textbf{H6 is supported for the diffusion prior}: its unseen content has a positive skill of 0.22 [0.14, 0.36] against the true CT, so it recovers part of what the views miss rather than inventing structure, and it reproduces the seen part far better than the physics-only reconstruction (0.88 vs 0.39). After Gaussian fitting the skill drops to 0.09, so the Gaussian step discards much of what the prior recovered. Nodules that are less visible to DTS had larger volume errors (Spearman $-0.47$ [$-0.75$, $-0.12$], $n=30$). \Cref{fig:seenex} shows one nodule.
 
-\textbf{H6}: \fillme{}.
+\begin{table}[!htbp]
+\centering\small
+\caption{Error drivers for diffusion with Gaussians: Spearman correlation with the absolute error [95\% CI], 150 nodules (step 17).}
+\label{tab:drivers}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lcc}
+\toprule
+Nodule property & Volume error & Mass error \\
+\midrule
+Diameter (radiologists) & $-0.10$ [$-0.26$, $+0.07$] & $-0.20$ [$-0.34$, $-0.03$] \\
+Solidity (LIDC texture) & $-0.21$ [$-0.36$, $-0.05$] & $-0.17$ [$-0.32$, $-0.01$] \\
+Density (mean HU) & $-0.32$ [$-0.46$, $-0.17$] & $-0.35$ [$-0.49$, $-0.20$] \\
+Radiologists' disagreement (CV) & $+0.04$ [$-0.13$, $+0.20$] & $+0.09$ [$-0.09$, $+0.27$] \\
+Malignancy rating & $-0.01$ [$-0.19$, $+0.16$] & $-0.12$ [$-0.28$, $+0.04$] \\
+Ensemble spread & $\mathbf{-0.52}$ [$-0.65$, $-0.37$] & $\mathbf{-0.50}$ [$-0.64$, $-0.35$] \\
+Physics data misfit & $-0.08$ [$-0.24$, $+0.08$] & $-0.04$ [$-0.19$, $+0.12$] \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
-\resultfig{seen_unseen_example.png}{Seen/unseen split of the true CT and of the prior's samples for one test nodule (step 17).}{fig:seenex}
-\resultfig{saliency_examples.png}{Input$\times$gradient saliency of the detector for true and false positive suggestions (step 17).}{fig:saliency}
+\Cref{tab:drivers} shows which nodules fail. Faint (low-density) and less solid nodules have larger errors, while size and the radiologists' own disagreement matter little. The most important finding is the sign of the ensemble spread: it is \emph{negatively} correlated with the error ($-0.52$). The eight samples agree most when they are most wrong, which happens when they all erase a faint nodule. The spread therefore signals the opposite of what an uncertainty should, which is also why the intervals normalised by it became unbounded.
+
+For the detector, the share of input$\times$gradient saliency within 10~mm of the suggestion was 0.15 for true positives and 0.16 for false positives (\cref{fig:saliency}): the detector looks at the local region in both cases, and false positives come from local structures that resemble nodules, such as vessels seen end-on, not from attention elsewhere.
+
+\resultfig{seen_unseen_example.png}{Seen/unseen split for one test nodule (LIDC-IDRI-0018): CT truth, ROI-SIRT, diffusion and diffusion with Gaussians, with the excess-attenuation profile through the nodule centre in depth (bottom).}{fig:seenex}
+\resultfig{saliency_examples.png}{Input$\times$gradient saliency of the detector for true and false positive suggestions (coronal and depth views).}{fig:saliency}
+
+\subsection{Why the Measurements Failed}
+
+The results point to three causes, each of which suggests a fix.
+\begin{enumerate}
+  \item \textbf{The prior shrinks faint nodules.} Training pairs were cut around nodules and around nodule-free lung, and the prior was not told that a nodule is present at the click. For faint nodules it often produces plausible normal lung instead, which is consistent with the strong negative bias, the larger errors of low-density nodules and the low ensemble spread on failures. \Cref{fig:example} shows such a case. A fix is to condition the prior on the click or oversample nodule pairs.
+  \item \textbf{Mass is measured in image space.} Although the X-rays fully determine the mass (0.3\% unseen), our measurement integrates the reconstruction inside a segmented window, so segmentation failures and the prior's shrinkage pass into the mass. A projection-domain mass estimate, which integrates the detector signal directly, would use the H1 physics as intended.
+  \item \textbf{Failures break the calibration.} Measurements of zero give infinite log-errors and unbounded intervals. Treating ``not measurable'' as a separate outcome, reported with its own probability, and calibrating only the measurable cases would give finite intervals.
+\end{enumerate}
+
+\resultfig{nodule_example.png}{One test nodule (LIDC-IDRI-0004, 6.8~mm) through all methods: CT truth, the DTS input, and each reconstruction with its segmentation (red) and sample spread (right).}{fig:example}
 
 \subsection{Acquisition Geometry Sensitivity}
 
@@ -258,10 +377,10 @@ On 12 nodules of two test patients, the depth smear (depth over in-plane width o
 
 \subsection{Run Time, Cost and Application}
 
-The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. On patient LIDC-IDRI-0018 a click on an annotated nodule returned mass and volume with intervals, the EUPS category with calibrated probabilities and the 3D view (\cref{fig:demo}); a click where no nodule exists returned ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
+The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector; measuring one nodule with all five reconstruction methods took a median of 45.5~s. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. For a click on an annotated nodule it returns mass and volume with intervals, the EUPS category with probabilities, the prism views with the sample spread, and an interactive 3D view in which the reconstruction is coloured by the disagreement of the eight samples and the radiologists' nodule is shown in grey (\cref{fig:demo}). A click where no nodule exists returns ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
 
-\resultfig{demo_report.png}{The click-to-3D application on a test patient: report with intervals and category probabilities.}{fig:demo}
+\resultfig{demo_report.png}{The click-to-3D application: 3D view coloured by sample disagreement (green: samples agree, red: uncertain in depth; grey: radiologists' nodule).}{fig:demo}
 
 \section{Summary}
 
-Every requirement with a fixed criterion was verified by an automatic check. The diffusion prior beat the physics-only input by 3.35~dB in the nodule region without overfitting, the learned detector beat the training-free baseline by a factor of 17 in CPM, and the full study cost about US\$16. \fillme{one sentence each on the H1--H6 outcomes}. Results that did not support a hypothesis are reported as such.
+Every requirement with a fixed criterion was checked automatically. The pipeline, the simulation, the reconstruction, the detector and the uncertainty machinery worked as specified: the learned detector beat the training-free baseline by a factor of 17 in CPM, the diffusion prior improved nodule-region PSNR by 3.35~dB on held-out pairs, conformal intervals reached their target coverage, calibrated category probabilities cut the Brier score for $P(V\geq100)$ from 0.54 to 0.17, and the seen/unseen analysis showed that the nodule's mass is fully measured by the X-rays and that the prior's unseen content correlates with the truth. The measurements themselves did not reach the goal: H1 and H2 were not supported, H4 was not supported for our method, and the intervals, although valid, were too wide to be useful. The analysis traced these failures to a prior that shrinks faint nodules, to measuring mass in image space rather than from the projections, and to failed measurements inside the calibration set. These are concrete, testable fixes rather than open questions.
