@@ -5,7 +5,7 @@ This chapter turns the problem into requirements, models the system with context
 
 \section{Requirement Analysis}
 
-\paragraph{Requirements elicitation.} Requirements were gathered from four sources: (i) the clinical guidelines that radiologists follow for nodules, namely the EUPS volume categories and the NELSON doubling-time categories~\cite{oudkerk2017eups,horeweg2014nelson}; (ii) meetings with our supervisor; (iii) the published limits of DTS and sparse-view reconstruction (\cref{ch:background}); and (iv) the constraints of a student project: public data only, no clinical scanner, a budget of tens of dollars and a fixed deadline. \Cref{tab:stakeholders} lists the stakeholders and their needs.
+\paragraph{Requirements elicitation.} Requirements were gathered from four sources: (i) the clinical guidelines that radiologists follow for nodules, namely the EUPS volume categories and the NELSON doubling-time categories~\cite{oudkerk2017eups,horeweg2014nelson}; (ii) meetings with our supervisor; (iii) the published limits of DTS and sparse-view reconstruction (\cref{ch:background}); and (iv) the constraints of a student project: public data only, no clinical scanner, limited computing resources and a fixed deadline. \Cref{tab:stakeholders} lists the stakeholders and their needs.
 
 \begin{table}[!htbp]
 \centering\small
@@ -17,7 +17,7 @@ Stakeholder & Need & How MedLift-3D answers it \\
 \midrule
 Radiologist & A 3D size and growth rate from a low-dose exam, and to know when not to trust it & Mass, volume, category and doubling time, each with a calibrated interval and a low-confidence flag \\
 Patient & Less radiation and cost per follow-up & DTS at about 0.1~mSv instead of CT \\
-Low-resource hospital & Affordable equipment and software & DTS hardware; software runs on a free or US\$1.33/hour GPU \\
+Low-resource hospital & Affordable equipment and software & DTS hardware; software runs on a single free or rented GPU \\
 Examiner / researcher & Claims that can be checked & Every step ends in PASS/FAIL checks; test patients never used for tuning \\
 \bottomrule
 \end{tabularx}
@@ -82,7 +82,7 @@ FR-11 & Interactive click-to-3D application and HTML report of all results & Dem
 ID & Requirement & Acceptance criterion \\
 \midrule
 NFR-01 Performance & One click gives a result quickly & $\leq 60$~s per nodule on one GPU \\
-NFR-02 Cost & The full study is affordable for students & $\leq$ US\$50 of rented GPU \\
+NFR-02 Compute & The study and the application run on modest hardware & One GPU for the study; free GPU for the application \\
 NFR-03 Reproducibility & Same input, same output; checkable steps & Fixed seed, one configuration file, PASS/FAIL checks, unit tests \\
 NFR-04 Validity & No optimistic bias & Test patients unused for training or tuning; simulation and reconstruction on different grids \\
 NFR-05 Safety & Never report a bare number & Every number has an interval; low-confidence flag when fewer than half of the hypotheses find the nodule or the spread exceeds $10\times$ \\
@@ -250,7 +250,7 @@ Alternative & Why rejected & Selected instead \\
 \midrule
 FBP or SIRT alone & Cannot fill the missing wedge; physics-only volume errors of 80--90\% on small nodules & SIRT as input and data-consistency step, plus a learned prior \\
 Neural radiance fields~\cite{mildenhall2020nerf} & Slow per-patient optimisation, implicit geometry, no prior for unseen depth & Explicit 3D Gaussians with closed-form mass \\
-Whole-volume latent diffusion at $512^3$ (initial design) & Too large to train and verify in time and budget; evaluated by generative losses, not clinical numbers & Small conditional prior on a prism, judged by calibrated measurements \\
+Whole-volume latent diffusion at $512^3$ (initial design) & Too large to train and verify with our resources; evaluated by generative losses, not clinical numbers & Small conditional prior on a prism, judged by calibrated measurements \\
 Small 3D box ROI & Each ray's attenuation lies mostly outside the box: 73\% error vs 5--7\% & Prism through the whole chest \\
 GAN prior & Training instability; one output per input & Diffusion: stable training, many hypotheses \\
 Unconditional prior with posterior sampling only & Slower and weaker for a strongly ill-posed \ang{30} problem & Conditional model + SIRT data consistency \\
