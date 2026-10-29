@@ -21,7 +21,7 @@ Resource & Used for & Specification & Cost \\
 Laptop / Kaggle CPU & Unit tests; synthetic-phantom smoke test & 4 cores & Free \\
 Kaggle notebook & 40-patient pilot run; final demo and report viewer & $2\times$ NVIDIA T4, 16~GB & Free \\
 RunPod CPU pod & Steps 02--04: patient selection, TCIA download, case building & Rented CPU & $<$ US\$2 \\
-RunPod GPU pod & Steps 05--18: simulation, training, evaluation & NVIDIA L40S, 48~GB & about US\$1/h \\
+RunPod GPU pod & Steps 05--18: simulation, training, evaluation & NVIDIA L40S, 48~GB & US\$1.33/h \\
 RunPod network volume & Shared storage between pods; backup after every step & Persistent volume & included \\
 \bottomrule
 \end{tabularx}
@@ -47,7 +47,7 @@ NumPy, SciPy, scikit-image & Morphology, segmentation, metrics & Mature and test
 crepes, scikit-learn & Conformal predictive systems; calibration metrics & Peer-reviewed implementation~\cite{bostrom2022crepes} \\
 Gradio & Browser application & Quick UI in Python (Flask + JavaScript: more work) \\
 Matplotlib, pytest & Figures; 69 unit tests & Standard \\
-bash, tmux & Unattended 14-hour run with resume and backups & Survives disconnections \\
+bash, tmux & Unattended 15-hour run with resume and backups & Survives disconnections \\
 Git, GitHub & Version control & Team collaboration \\
 \bottomrule
 \end{tabularx}
@@ -153,7 +153,7 @@ FR-09 & Growth metrics reported & Category accuracy, doubling-time error and fal
 FR-10 & Explanation outputs & Seen/unseen, saliency and error-driver tables on 30 test nodules & Yes \\
 FR-11 & Demo self-test; report & Demo served from Kaggle; HTML report with 13 checked steps & Yes \\
 NFR-01 & $\leq 60$~s per nodule & Median 45.5~s per nodule for all five methods together on the L40S & Yes \\
-NFR-02 & $\leq$ US\$50 & about US\$16 for the full run & Yes \\
+NFR-02 & $\leq$ US\$50 & about US\$20 for the full run & Yes \\
 NFR-03 & Reproducible, checkable & Fixed seed, one configuration, 69 tests, PASS/FAIL logs & Yes \\
 NFR-04 & No optimistic bias & Test patients unused until final tables; separate simulation and reconstruction grids & Yes \\
 NFR-05 & No bare numbers & Every value has an interval and a low-confidence flag & Yes \\
@@ -377,7 +377,7 @@ On 12 nodules of two test patients, the depth smear (depth over in-plane width o
 
 \subsection{Run Time, Cost and Application}
 
-The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector; measuring one nodule with all five reconstruction methods took a median of 45.5~s. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. For a click on an annotated nodule it returns mass and volume with intervals, the EUPS category with probabilities, the prism views with the sample spread, and an interactive 3D view in which the reconstruction is coloured by the disagreement of the eight samples and the radiologists' nodule is shown in grey (\cref{fig:demo}); in both views the uncertainty is largest in depth, as the physics predicts. A click where no nodule exists returns ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
+The full run took about 15 hours on one RunPod L40S GPU at US\$1.33 per hour, about US\$20 in total, including 6 hours of diffusion training and about 18 minutes for the detector; measuring one nodule with all five reconstruction methods took a median of 45.5~s. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. For a click on an annotated nodule it returns mass and volume with intervals, the EUPS category with probabilities, the prism views with the sample spread, and an interactive 3D view in which the reconstruction is coloured by the disagreement of the eight samples and the radiologists' nodule is shown in grey (\cref{fig:demo}); in both views the uncertainty is largest in depth, as the physics predicts. A click where no nodule exists returns ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
 
 \begin{figure}[htbp]
   \centering

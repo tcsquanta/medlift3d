@@ -17,7 +17,7 @@ Stakeholder & Need & How MedLift-3D answers it \\
 \midrule
 Radiologist & A 3D size and growth rate from a low-dose exam, and to know when not to trust it & Mass, volume, category and doubling time, each with a calibrated interval and a low-confidence flag \\
 Patient & Less radiation and cost per follow-up & DTS at about 0.1~mSv instead of CT \\
-Low-resource hospital & Affordable equipment and software & DTS hardware; software runs on a free or US\$1/hour GPU \\
+Low-resource hospital & Affordable equipment and software & DTS hardware; software runs on a free or US\$1.33/hour GPU \\
 Examiner / researcher & Claims that can be checked & Every step ends in PASS/FAIL checks; test patients never used for tuning \\
 \bottomrule
 \end{tabularx}
@@ -238,7 +238,7 @@ before the next DDIM step. Eight samples give eight hypotheses that agree with t
 
 \subsection{Alternative Solutions}
 
- \Cref{tab:alternatives} lists the alternatives and why they were rejected. The first design of this project, explored in the earlier FYDP phases, generated whole $512^3$ volumes with a latent diffusion model; it is included in the table because its lessons shaped the final design: a large generator judged by training losses could not show whether a single nodule measurement was right, so FYDP-III narrowed the goal to clinical numbers that can be verified.
+ \Cref{tab:alternatives} lists the alternatives and why they were rejected. The initial design of this project generated whole $512^3$ volumes with a latent diffusion model; it is included in the table because its lessons shaped the final design: a large generator judged by training losses could not show whether a single nodule measurement was right, so the goal was narrowed to clinical numbers that can be verified.
 
 \begin{table}[!htbp]
 \centering\small
@@ -250,7 +250,7 @@ Alternative & Why rejected & Selected instead \\
 \midrule
 FBP or SIRT alone & Cannot fill the missing wedge; physics-only volume errors of 80--90\% on small nodules & SIRT as input and data-consistency step, plus a learned prior \\
 Neural radiance fields~\cite{mildenhall2020nerf} & Slow per-patient optimisation, implicit geometry, no prior for unseen depth & Explicit 3D Gaussians with closed-form mass \\
-Whole-volume latent diffusion at $512^3$ (earlier FYDP design) & Too large to train and verify in time and budget; evaluated by generative losses, not clinical numbers & Small conditional prior on a prism, judged by calibrated measurements \\
+Whole-volume latent diffusion at $512^3$ (initial design) & Too large to train and verify in time and budget; evaluated by generative losses, not clinical numbers & Small conditional prior on a prism, judged by calibrated measurements \\
 Small 3D box ROI & Each ray's attenuation lies mostly outside the box: 73\% error vs 5--7\% & Prism through the whole chest \\
 GAN prior & Training instability; one output per input & Diffusion: stable training, many hypotheses \\
 Unconditional prior with posterior sampling only & Slower and weaker for a strongly ill-posed \ang{30} problem & Conditional model + SIRT data consistency \\
@@ -262,31 +262,45 @@ Volume-only reporting & Volume depends on the poorly measured depth & Mass first
 
 \section{Project Plan}
 
-The FYDP-III work was organised in three overlapping streams over the trimester (\cref{fig:gantt}): analysis and design, implementation of the 18-step pipeline, and verification with a full study. Implementation tasks were ordered so that every component could be tested on synthetic phantoms before real data arrived, and real-data pilots on 4 and 40 patients preceded the full 583-patient run.
+MedLift-3D was developed over twelve months in an iterative research and development cycle, organised in four phases that match the task groups of the Gantt chart in \cref{fig:gantt}. The iterative approach suits the experimental nature of generative AI: the prior, the measurement and the uncertainty layer were revised whenever an intermediate verification step showed a problem.
 
-\begin{figure}[htbp]
+\paragraph{Phase 1: Inception, data and feasibility (months 1--3).} \emph{Objective:} establish the theoretical basis and a reliable data pipeline. \emph{Tasks:} 1.1 literature review and ethics, 1.2 dataset acquisition and preprocessing, 1.3 DTS simulation, 1.4 baseline reconstruction. \emph{Deliverables:} literature review, curated LIDC-IDRI cases with consensus masks, the DTS simulator and baseline SIRT results.
+
+\paragraph{Phase 2: Core generative architecture (months 3--6).} \emph{Objective:} build and train the learned prior. \emph{Tasks:} 2.1 projection physics and its verification (including the projection-moment analysis), 2.2 prism ROI reconstruction, 2.3 conditional diffusion prior with data consistency, 2.4 diffusion training. \emph{Deliverables:} verified differentiable projector, prism reconstruction, trained diffusion prior.
+
+\paragraph{Phase 3: Gaussians, detection and uncertainty (months 6--9).} \emph{Objective:} turn reconstructions into calibrated, explainable measurements. \emph{Tasks:} 3.1 Gaussian parameterisation and closed-form mass, 3.2 nodule detector, 3.3 conformal uncertainty, 3.4 explainability. \emph{Deliverables:} measurement module, detector, calibrated intervals and probabilities, seen/unseen analysis.
+
+\paragraph{Phase 4: Validation, interface and deployment (months 9--12).} \emph{Objective:} evaluate the complete system and deliver it. \emph{Tasks:} 4.1 pilot and full-scale evaluation, 4.2 growth and sensitivity studies, 4.3 user interface development, 4.4 documentation and defense. \emph{Deliverables:} results of the 583-patient study, the click-to-3D application, the final report.
+
+\begin{sidewaysfigure}
   \centering
-  \resizebox{\linewidth}{!}{\input{figures/fig_gantt}}
-  \caption{FYDP-III schedule by week. \fillme{adjust the week numbers to your trimester dates}}
+  \resizebox{0.95\textheight}{!}{\input{figures/fig_gantt}}
+  \caption{Gantt chart of the twelve-month project schedule, by phase and task.}
   \label{fig:gantt}
-\end{figure}
+\end{sidewaysfigure}
 
 \section{Task Allocation}
 
-Responsibilities were allocated by each member's strengths so that the three main streams (the learned models, the computing and data infrastructure, and the application with its evaluation) could progress in parallel. Each pipeline step has one owner who is accountable for its PASS/FAIL checks, and all members reviewed every step before the full run. Work was coordinated through a shared Git repository. \Cref{tab:tasks} gives the responsibilities of each team member in FYDP-III. \fillme{confirm or correct the allocation}
+Responsibilities were allocated according to the technical area in which each member is strongest, so that the critical paths of theoretical modelling, system optimisation and application engineering could progress in parallel. The mathematically intensive parts (the diffusion prior, its conditioning and data consistency, and the statistical calibration) need a solid theoretical grounding and were led by the lead AI architect. The systems engineer focused on performance and infrastructure, making the volumetric reconstruction feasible in GPU memory and running the computation on cloud GPUs. The full-stack developer connected the algorithms to clinical use, ensuring data quality, the user interface and the evaluation outputs. Every pipeline step has one owner who is accountable for its PASS/FAIL checks, and all members reviewed every step before the full run. \Cref{tab:tasks} gives the detailed allocation.
 
 \begin{table}[!htbp]
 \centering\small
-\caption{Task allocation matrix.}
+\caption{Detailed task allocation matrix.}
 \label{tab:tasks}
-\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}X}
 \toprule
-Team member & Role & Responsibilities \\
+Team member & Role and focus & Detailed responsibilities \\
 \midrule
-Jubair Ahmed (011222136) & Lead AI architect & Projection-moment analysis; diffusion prior design and training (step 08); fit check (15); conformal uncertainty (10, 16) \\
-Foyez Ahammed Naeem (011222011) & Systems engineer & Cloud infrastructure (RunPod CPU and GPU pods, Kaggle); data pipeline (02--07); detector training (14); full run and backups \\
-Md Motasim Billah (011222016) & Full-stack developer & Click-to-3D application (12); evaluation tables and figures (10, 11); explainability (17); HTML report (18) \\
-All members & -- & Literature review, verification of every PASS/FAIL step, report writing, presentation \\
+Jubair Ahmed (011222136) & Lead AI architect (theoretical modelling) &
+\textbullet~Projection-moment analysis of what DTS can measure \newline \textbullet~Design and mathematical formulation of the conditional diffusion prior (v-prediction, cosine schedule, DDIM sampling) \newline \textbullet~SIRT data-consistency sampling to suppress anatomical hallucination \newline \textbullet~Conformal intervals and calibrated category probabilities \\
+\midrule
+Foyez Ahammed Naeem (011222011) & Systems engineer (optimisation and backend) &
+\textbullet~Differentiable DTS projector and memory-efficient prism reconstruction \newline \textbullet~GPU optimisation of training and sampling (mixed precision, batch sizing) \newline \textbullet~3D Gaussian fitting and closed-form mass; nodule detector training \newline \textbullet~Cloud infrastructure (RunPod CPU and GPU pods, Kaggle), the full run and backups \\
+\midrule
+Md Motasim Billah (011222016) & Full-stack developer (data and visualisation) &
+\textbullet~Data curation and preprocessing of LIDC-IDRI (selection, consensus masks, DTS simulation inputs) \newline \textbullet~Clinician-facing click-to-3D interface with interactive 3D visualisation \newline \textbullet~Automated evaluation pipelines: accuracy, growth and explainability outputs, HTML report \\
+\midrule
+All members & -- & Literature review, verification of every PASS/FAIL step, report writing and presentation \\
 \bottomrule
 \end{tabularx}
 \end{table}

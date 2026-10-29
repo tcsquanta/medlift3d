@@ -75,11 +75,11 @@ The design was shaped by economic, environmental, ethical, health and safety, so
 
 \subsection{Economic Constraint}
 
-The project had no external funding, so all computation had to fit a student budget. Free resources were used wherever possible (laptop CPU, Kaggle GPUs for the pilot and the application), CPU-only steps (3--5 hours of download and case building) were moved to a cheap CPU machine, and GPU training was given a fixed 6-hour budget. The full study cost about US\$16 on the GPU and under US\$2 on the CPU machine. Clinically, the economic case rests on DTS: a DTS-capable radiography room costs a fraction of a CT scanner and examines patients faster, so follow-up by DTS can lower the cost of each follow-up for hospitals and patients.
+The project had no external funding, so all computation had to fit a student budget. Free resources were used wherever possible (laptop CPU, Kaggle GPUs for the pilot and the application), CPU-only steps (3--5 hours of download and case building) were moved to a cheap CPU machine, and GPU training was given a fixed 6-hour budget. The full study cost about US\$20 on the GPU and under US\$2 on the CPU machine. Clinically, the economic case rests on DTS: a DTS-capable radiography room costs a fraction of a CT scanner and examines patients faster, so follow-up by DTS can lower the cost of each follow-up for hospitals and patients.
 
 \subsection{Environmental Constraint}
 
-\paragraph{Energy and emissions.} The L40S GPU has a 350~W power limit, so the 14-hour run used at most about 5~kWh on the GPU, roughly 7~kWh including CPU, memory and cooling, plus under 1~kWh for the CPU machine. At a world-average grid intensity of about 0.48~kg CO$_2$ per kWh (Bangladesh's grid is higher, about 0.6), the study emitted roughly 3.5--5~kg CO$_2$, comparable to a 20--30~km car trip. One measurement (about 45~s on the GPU) uses about 0.004~kWh. These are estimates from rated power, following~\cite{lannelongue2021green}, not metered values.
+\paragraph{Energy and emissions.} The L40S GPU has a 350~W power limit, so the 15-hour run used at most about 5.3~kWh on the GPU, roughly 7.5~kWh including CPU, memory and cooling, plus under 1~kWh for the CPU machine. At a world-average grid intensity of about 0.48~kg CO$_2$ per kWh (Bangladesh's grid is higher, about 0.6), the study emitted roughly 4--5.5~kg CO$_2$, comparable to a 25--35~km car trip. One measurement (about 45~s on the GPU) uses about 0.004~kWh. These are estimates from rated power, following~\cite{lannelongue2021green}, not metered values.
 
 \paragraph{Data storage and waste.} The 64~GB of downloaded DICOM was deleted after conversion to compact cases, and intermediate files that can be regenerated were not backed up. No hardware was bought, so the project produced no electronic waste.
 
@@ -93,7 +93,7 @@ The project had no external funding, so all computation had to fit a student bud
 \begin{itemize}
   \item \textbf{Honest claims:} all results come from \emph{simulated} DTS, not real scanners, and \cref{sec:gap} lists what we do not claim.
   \item \textbf{Honest results:} hypotheses were stated before the results, and the report gives whichever outcome we found, including that H1 and H2 were not supported, that the intervals were too wide to be useful, that the detector sensitivity is only 35\% at two false positives per scan, and the failed checks in \cref{ch:results}.
-  \item \textbf{Credit:} all datasets, libraries and ideas we build on are cited. \fillme{keep or edit:} AI coding assistants were used during implementation; every part of the code was reviewed, tested and verified by the team, which takes responsibility for it.
+  \item \textbf{Credit:} all datasets, libraries and ideas we build on are cited, including the data citations required by TCIA.
   \item \textbf{Fairness:} LIDC-IDRI comes mainly from US patients; performance on other populations, for example patients with healed tuberculosis scars, is unknown and is stated as such.
   \item \textbf{Data ethics:} only de-identified public data, used under its licence, with no attempt at re-identification.
 \end{itemize}
@@ -141,9 +141,10 @@ Adoption of health technology depends on public health policy and procurement. I
 \subsection{Legal Considerations}
 
 \begin{itemize}
-  \item \textbf{Data licence:} LIDC-IDRI is distributed by TCIA under the Creative Commons Attribution 3.0 licence and the TCIA data usage policy~\cite{tcia_policy}; we cite the required publication~\cite{armato2011lidc} and make no attempt at re-identification.
-  \item \textbf{Medical device regulation:} software that measures nodules for diagnosis is software as a medical device. In Bangladesh, medical devices are registered by the Directorate General of Drug Administration (DGDA) \fillme{verify the current DGDA rules for software}. Elsewhere the US FDA (510(k) or De Novo), the EU Medical Device Regulation~\cite{eumdr} and the EU AI Act~\cite{euaiact} would apply; each requires risk management~\cite{iso14971}, life-cycle processes~\cite{iec62304} and clinical evidence.
-  \item \textbf{Data protection:} a clinical deployment processes personal health data and must follow Bangladesh's personal data protection law \fillme{verify the current act and its status} and, for international data, GDPR and HIPAA: consent, purpose limitation and secure storage. The demo uses no personal data.
+  \item \textbf{Data licence:} LIDC-IDRI is distributed by TCIA under the Creative Commons Attribution 3.0 Unported licence, which allows commercial, scientific and educational use with attribution. The TCIA data usage policy forbids any attempt to identify or contact the participants and requires every publication to cite both the collection~\cite{armato2011lidc} and the TCIA repository~\cite{clark2013tcia}~\cite{tcia_policy}. We follow both requirements and made no attempt at re-identification.
+  \item \textbf{Medical device regulation in Bangladesh:} medical devices are regulated by the Directorate General of Drug Administration (DGDA). The Drugs and Cosmetics Act 2023~\cite{bddca2023}, passed by Parliament in September 2023, replaced the Drugs Act 1940 and the Drugs (Control) Ordinance 1982 and includes provisions on medical devices. Registration follows the DGDA Registration Guidelines for Medical Devices~\cite{dgda2015}, which are based on the Global Harmonization Task Force guidance and define a medical device to include software intended for diagnosis or monitoring. A clinical version of MedLift-3D would therefore be a registrable medical device; implementing rules under the 2023 Act are still being developed, so the current DGDA requirements must be confirmed at the time of submission.
+  \item \textbf{Other markets:} the US FDA (510(k) or De Novo), the EU Medical Device Regulation~\cite{eumdr} and the EU AI Act~\cite{euaiact}, which classes medical AI as high risk, would apply; each requires risk management~\cite{iso14971}, life-cycle processes~\cite{iec62304} and clinical evidence.
+  \item \textbf{Data protection:} Bangladesh's Personal Data Protection Ordinance 2025~\cite{bdpdpo2025}, approved on 9 October 2025 and published in the official gazette on 6 November 2025, recognises citizens as the owners of their personal data, makes explicit consent mandatory before personal data is collected, stored, transferred or used, treats health records as sensitive data with stricter rules and penalties, and restricts cross-border transfers; some provisions take effect 18 months after publication. A clinical deployment would have to obtain consent, keep health data within these rules (and GDPR or HIPAA for international data), and preferably compute inside the country. The demonstration uses only de-identified public data.
   \item \textbf{Liability:} the intended use is decision support; the clinician remains responsible for the diagnosis.
 \end{itemize}
 
@@ -159,7 +160,7 @@ Adoption of health technology depends on public health policy and procurement. I
 
 \section{Cost Analysis}
 
-\paragraph{Actual project budget.} \Cref{tab:budget} gives the actual cost of FYDP-III (exchange rate assumed: US\$1 $\approx$ BDT 120).
+\paragraph{Actual project budget.} \Cref{tab:budget} gives the actual cost of the computation (exchange rate assumed: US\$1 $\approx$ BDT 120).
 
 \begin{table}[!htbp]
 \centering\small
@@ -170,18 +171,18 @@ Adoption of health technology depends on public health policy and procurement. I
 \toprule
 Item & US\$ & BDT \\
 \midrule
-RunPod GPU (L40S, 14-hour full run incl.\ network volume) & $\approx 16$ & $\approx \num{1900}$ \\
+RunPod GPU (L40S, 15 hours at US\$1.33 per hour) & $\approx 20$ & $\approx \num{2400}$ \\
 RunPod CPU machine (download and case building) & $<2$ & $<240$ \\
 Kaggle notebooks (pilot, application) & 0 & 0 \\
 LIDC-IDRI data and open-source software & 0 & 0 \\
 \midrule
-\textbf{Total} & \textbf{about 18} & \textbf{about 2,150} \\
+\textbf{Total} & \textbf{about 22} & \textbf{about 2,640} \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table}
 
-\paragraph{Alternate budget: buy instead of rent.} A workstation with one RTX~4090 (24~GB) would cost about BDT 4.5--5.5 lakh \fillme{check the current local price}. It would run the study in 20--30 hours but pays off only after hundreds of runs. Renting cost less than 1\% of buying and provided a larger 48~GB GPU, so renting was the right choice for a one-off study; buying makes sense only for a centre with continuous use.
+\paragraph{Alternate budget: buy instead of rent.} An RTX~4090 (24~GB) graphics card alone costs about BDT 2.4--2.9 lakh at Bangladeshi retailers, so a complete workstation would cost about BDT 4--5 lakh. It would run the study in 20--30 hours but pays off only after hundreds of runs. Renting cost less than 1\% of buying and provided a larger 48~GB GPU, so renting was the right choice for a one-off study; buying makes sense only for a centre with continuous use.
 
 \paragraph{Revenue model (illustrative).} For a commercial version, assume 18 months of validation and registration and customers among diagnostic centres and hospitals with DTS-capable radiography (\cref{tab:revenue,tab:cashflow}).
 
@@ -300,7 +301,7 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 \end{adjustbox}
 \end{table}
 
-\paragraph{A1 -- Range of resources.} A public archive of 583 patients (about 64~GB), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries, all within about US\$18.
+\paragraph{A1 -- Range of resources.} A public archive of 583 patients (about 64~GB), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries, all within about US\$22.
 
 \paragraph{A2 -- Level of interaction.} Interaction among three team members with distinct roles, the supervisor, the course teacher, published clinical guidelines and open-source communities (crepes, Gradio, pylidc).
 
@@ -312,4 +313,4 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 
 \section{Summary}
 
-MedLift-3D follows the software, hardware and communication standards relevant to medical imaging software and prepares for IEC 62304 and ISO 14971. Its main impacts are positive (lower dose and cost, wider access), with clear risks (wrong measurements, over-trust, untested populations) that the design mitigates through calibrated intervals, flags, clinician control and a validation plan. The project cost about US\$18 and meets the attributes of a complex engineering problem.
+MedLift-3D follows the software, hardware and communication standards relevant to medical imaging software and prepares for IEC 62304 and ISO 14971. Its main impacts are positive (lower dose and cost, wider access), with clear risks (wrong measurements, over-trust, untested populations) that the design mitigates through calibrated intervals, flags, clinician control and a validation plan. The project cost about US\$22 and meets the attributes of a complex engineering problem.

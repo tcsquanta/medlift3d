@@ -1,4 +1,4 @@
-% MedLift-3D -- FYDP-III final report (UIU CSE template layout)
+% MedLift-3D -- final report (UIU CSE template layout)
 % Build:  latexmk -pdf main.tex      (or upload the whole folder to Overleaf)
 \documentclass[12pt,a4paper,oneside]{report}
 
@@ -15,6 +15,7 @@
 \usepackage{caption,subcaption}
 \usepackage{adjustbox}
 \usepackage{float}
+\usepackage{rotating}
 \usepackage[section]{placeins}
 % keep floats inside their own subsection
 \makeatletter\AtBeginDocument{\let\oldsubsection\subsection\renewcommand{\subsection}{\FloatBarrier\oldsubsection}}\makeatother
@@ -53,7 +54,7 @@
 \newcommand{\xmark}{\ding{55}}
 % Visible placeholder for a number that must come from the Kaggle outputs.
 % Set \showfillfalse to hide all placeholders in the final build.
-\newif\ifshowfill \showfilltrue
+\newif\ifshowfill \showfillfalse
 \newcommand{\fillme}[1]{\ifshowfill{\color{red}\textbf{[FILL: #1]}}\fi}
 % Result figure: includes figures/results/<file> when present, otherwise a framed placeholder.
 \newcommand{\resultfig}[4][0.85\linewidth]{%
@@ -74,7 +75,7 @@
 \renewcommand{\headrulewidth}{0.4pt}
 \fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
 
-\hypersetup{pdftitle={MedLift-3D: FYDP-III Final Report},pdfauthor={Jubair Ahmed, Foyez Ahammed Naeem, Md Motasim Billah}}
+\hypersetup{pdftitle={MedLift-3D: Final Report},pdfauthor={Jubair Ahmed, Foyez Ahammed Naeem, Md Motasim Billah}}
 
 \begin{document}
 
@@ -88,8 +89,6 @@
 \vspace{1.2cm}
 {\large Jubair Ahmed (011222136)\\[2pt] Foyez Ahammed Naeem (011222011)\\[2pt] Md Motasim Billah (011222016)\par}
 \vspace{1.6cm}
-{\large Final Year Design Project -- III: Final Report\par}
-\vspace{0.8cm}
 Submitted in partial fulfilment of the requirements\\ of the degree of Bachelor of Science in Computer Science and Engineering\par
 \vspace{1.4cm}
 {\large October 30, 2026\par}
