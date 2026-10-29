@@ -377,9 +377,26 @@ On 12 nodules of two test patients, the depth smear (depth over in-plane width o
 
 \subsection{Run Time, Cost and Application}
 
-The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector; measuring one nodule with all five reconstruction methods took a median of 45.5~s. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. For a click on an annotated nodule it returns mass and volume with intervals, the EUPS category with probabilities, the prism views with the sample spread, and an interactive 3D view in which the reconstruction is coloured by the disagreement of the eight samples and the radiologists' nodule is shown in grey (\cref{fig:demo}). A click where no nodule exists returns ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
+The full run took 14 hours on one L40S (01:27--15:27, October 27) for about US\$16, including 6 hours of diffusion training and about 18 minutes for the detector; measuring one nodule with all five reconstruction methods took a median of 45.5~s. The application loads the trained models on a free Kaggle notebook and is reached from a browser through an HTTPS tunnel. For a click on an annotated nodule it returns mass and volume with intervals, the EUPS category with probabilities, the prism views with the sample spread, and an interactive 3D view in which the reconstruction is coloured by the disagreement of the eight samples and the radiologists' nodule is shown in grey (\cref{fig:demo}); in both views the uncertainty is largest in depth, as the physics predicts. A click where no nodule exists returns ``no nodule measured at the click'' instead of a number, as NFR-05 requires.
 
-\resultfig{demo_report.png}{The click-to-3D application: 3D view coloured by sample disagreement (green: samples agree, red: uncertain in depth; grey: radiologists' nodule).}{fig:demo}
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{0.49\linewidth}\centering\includegraphics[width=\linewidth]{figures/results/demo_3d_a.png}\caption{}\end{subfigure}\hfill
+  \begin{subfigure}{0.49\linewidth}\centering\includegraphics[width=\linewidth]{figures/results/demo_3d_b.png}\caption{}\end{subfigure}
+  \caption[3D view of the click-to-3D application]{3D view of the application for two test nodules. The reconstruction is coloured by the disagreement of the eight samples (green: samples agree; red: uncertain, mostly in depth) and the radiologists' nodule is shown in grey. In (a) the reconstruction matches the consensus nodule; in (b) it is smaller than the consensus nodule, the shrinkage discussed in \cref{sec:resultsdisc}.}
+  \label{fig:demo}
+\end{figure}
+
+The application also shows the prism around the click in the coronal plane (what DTS shows) and the sagittal plane (depth, where DTS is blind), together with the mean reconstruction, its segmentation and the sample spread (\cref{fig:demoroi}). For a solid, well-contrasted nodule the segmentation follows the nodule and the spread is concentrated at its border; for a faint nodule the reconstruction is smaller and less certain; and the physics-only Gaussians can fail completely near the chest wall, where the spread is high everywhere and no nodule is found.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{\linewidth}\centering\includegraphics[width=0.82\linewidth]{figures/results/demo_roi_solid.png}\caption{Solid nodule, diffusion with Gaussians.}\end{subfigure}\\[4pt]
+  \begin{subfigure}{\linewidth}\centering\includegraphics[width=0.82\linewidth]{figures/results/demo_roi_faint.png}\caption{Faint nodule, diffusion with Gaussians.}\end{subfigure}\\[4pt]
+  \begin{subfigure}{\linewidth}\centering\includegraphics[width=0.82\linewidth]{figures/results/demo_roi_physics.png}\caption{Nodule near the chest wall, physics-only Gaussians: no nodule found.}\end{subfigure}
+  \caption[Prism views in the application]{Prism views in the application: DTS input (top row of each panel) and reconstruction with its segmentation (red) and sample standard deviation (bottom row), coronal and sagittal (depth).}
+  \label{fig:demoroi}
+\end{figure}
 
 \section{Summary}
 
