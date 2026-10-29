@@ -5,9 +5,12 @@ This chapter describes the hardware and tools, how every requirement was verifie
 
 \section{Environment Setup}
 
-\paragraph{Hardware.} \Cref{tab:hardware} lists the computing resources. CPU-only work (downloading about 64~GB of CT and building the cases) ran on a cheap CPU machine, and both machines shared one network volume so that the GPU machine started from the finished cases.
+This section describes the hardware, the software tools with the reasons for choosing them, the configuration of the pipeline, and the dataset with its preprocessing.
 
-\begin{table}[htbp]
+\subsection{Hardware}
+ \Cref{tab:hardware} lists the computing resources. CPU-only work (downloading about 64~GB of CT and building the cases) ran on a cheap CPU machine, and both machines shared one network volume so that the GPU machine started from the finished cases.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Computing resources.}
 \label{tab:hardware}
@@ -24,9 +27,11 @@ RunPod network volume & Shared storage between pods; backup after every step & P
 \end{tabularx}
 \end{table}
 
-\paragraph{Software and tools.} \Cref{tab:tools} lists the tools with the alternatives considered.
+\subsection{Software and Tools}
 
-\begin{table}[htbp]
+All code is written in Python, the standard language of medical AI research. PyTorch was chosen because the whole chain (projector, SIRT, diffusion network, detector and Gaussian fitting) needs automatic differentiation on the GPU in one framework. Instead of an external tomography toolbox we wrote our own ray-driven DTS projector in PyTorch: it reproduces the exact linear-sweep geometry, provides gradients for the Gaussian refinement, and needs no separate CUDA build, which had caused installation problems with toolbox-based setups. LIDC-IDRI is read with pydicom and pylidc, the official tools for its annotations; conformal predictive systems use the peer-reviewed crepes library; and the application uses Gradio, which builds a browser interface directly from Python.  \Cref{tab:tools} lists the tools with the alternatives considered.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Software tools and the reasons for choosing them.}
 \label{tab:tools}
@@ -48,11 +53,57 @@ Git, GitHub & Version control & Team collaboration \\
 \end{tabularx}
 \end{table}
 
-\paragraph{Configuration and pipeline.} One YAML file holds every setting (geometry, dose, prism size, network size, sampling steps, number of hypotheses, $\alpha=0.1$) and the random seed is fixed. The pipeline has 18 scripted steps: 00 environment check, 01 physics verification, 02 patient selection, 03 TCIA download, 04 cases and split, 05 DTS simulation, 06 SIRT, 07 training pairs, 08 diffusion training, 09 per-nodule pipeline, 10 evaluation and conformal intervals, 11 growth, 12 demo, 13 geometry sensitivity, 14 detector, 15 fit check, 16 conformal predictive systems, 17 explainability and 18 HTML report. Each step prints PASS/FAIL lines with the expected value.
+\subsection{Configuration and Pipeline}
+ One YAML file holds every setting (geometry, dose, prism size, network size, sampling steps, number of hypotheses, $\alpha=0.1$) and the random seed is fixed. The pipeline has 18 scripted steps: 00 environment check, 01 physics verification, 02 patient selection, 03 TCIA download, 04 cases and split, 05 DTS simulation, 06 SIRT, 07 training pairs, 08 diffusion training, 09 per-nodule pipeline, 10 evaluation and conformal intervals, 11 growth, 12 demo, 13 geometry sensitivity, 14 detector, 15 fit check, 16 conformal predictive systems, 17 explainability and 18 HTML report. Each step prints PASS/FAIL lines with the expected value.
+
+\subsection{Dataset and Preprocessing}
+
+\paragraph{Source.} We used the Lung Image Database Consortium and Image Database Resource Initiative (LIDC-IDRI) collection~\cite{armato2011lidc}, distributed by The Cancer Imaging Archive (TCIA) under the Creative Commons Attribution 3.0 licence. It contains 1{,}018 thoracic CT scans from 1{,}010 patients, collected at seven academic centres and eight medical imaging companies on scanners from several manufacturers. Each scan was read by four experienced thoracic radiologists in a two-phase process: first blinded, then with the other readers' marks visible. Every reader outlined each nodule of 3~mm or larger and rated its characteristics, including malignancy. LIDC-IDRI is the only large public CT collection with nodule outlines from several radiologists, which is exactly what is needed both as 3D ground truth and to measure inter-reader variability. No public dataset pairs chest DTS with CT, so DTS was simulated from these CT scans.
+
+\paragraph{Selection.} Patients were selected with pylidc~\cite{hancock2016pylidc} (\cref{fig:dataset}): a scan was kept if its slice thickness was at most 2.5~mm and it contained at least one nodule of 4--30~mm marked by at least three of the four radiologists, the convention used by LUNA16~\cite{setio2017luna}. This gave 583 patients with 1{,}144 nodules. Annotations from different readers were grouped into nodules by pylidc's clustering, and a nodule's \emph{consensus mask} is the set of voxels outlined by at least 50\% of its readers; the individual reader masks were kept to measure inter-reader variability.
+
+\paragraph{Split.} Patients, not nodules, were split 60/20/20 into training (350), calibration (117) and test (116) sets, so that no patient contributes nodules to two sets. The test set contains 225 nodules. The diffusion prior and detector were trained on the training patients, with 10\% of them held out to select the diffusion checkpoint; the calibration patients were used to select the detector checkpoint and to calibrate the conformal methods; the test patients were used only for the final results.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.78\linewidth}{!}{\input{figures/fig_dataset}}
+  \caption{Patient selection and split of the LIDC-IDRI dataset.}
+  \label{fig:dataset}
+\end{figure}
+
+\paragraph{Preprocessing.} About 64~GB of DICOM was downloaded from TCIA and converted into one compact case file per scan: the CT in Hounsfield units (clipped to $[-1024, 3071]$ and stored as 16-bit integers), the consensus and reader masks of every nodule (bit-packed), and a header with the voxel geometry and patient ID, after which the DICOM was deleted. The CT table was removed by keeping the largest connected body component, because a table would not be present in a chest DTS acquisition. We verified that the DICOM slice positions agree with pylidc's for every scan (difference 0.000~mm), that the consensus masks lie on nodule tissue (median $-202$~HU) and that the consensus volume is on average 0.81 of the mean reader volume.
+
+\paragraph{DTS simulation and training pairs.} For each case, 15 projections over $\pm15^\circ$ were simulated at CT resolution with Poisson noise ($I_0 = 2\times10^4$ photons per pixel and view; median single-view nodule contrast-to-noise ratio 3.3) and reconstructed by whole-chest SIRT. Training pairs for the diffusion prior were cut from the training patients only: for each pair, the prism SIRT of the DTS is the condition and the same prism of the CT is the target, taken around nodules and around nodule-free lung regions so that the prior also learns normal anatomy. \fillme{number of training pairs (nodule and nodule-free) from logs/07\_*.log}
+
+\Cref{tab:data} summarises the dataset.
+
+\begin{table}[!htbp]
+\centering\small
+\caption{Dataset characteristics.}
+\label{tab:data}
+\begin{adjustbox}{max width=\linewidth}
+\begin{tabular}{lr}
+\toprule
+Item & Value \\
+\midrule
+LIDC-IDRI patients ($\geq$1 nodule of 4--30~mm marked by $\geq$3 readers, slices $\leq$2.5~mm) & 583 \\
+Nodules & \num{1144} \\
+Train / calibration / test patients & 350 / 117 / 116 \\
+Test nodules (detector evaluation) & 225 in 116 scans \\
+Nodules measured in step 09 & \fillme{cal / test} \\
+Consensus volume / mean reader volume & 0.81 \\
+Single-view nodule contrast-to-noise ratio (median) & 3.3 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
 \section{Testing and Evaluation}
 
-\paragraph{Verification strategy.} Testing was done at four levels:
+This section describes how the system was tested, how the data were split, which metrics and baselines were used, how every requirement was verified, and which problems were found and fixed.
+
+\subsection{Verification Strategy}
+ Testing was done at four levels:
 \begin{enumerate}
   \item \textbf{Unit tests (69):} projector adjointness and mass conservation, the Gaussian mass formula, conformal coverage on synthetic data, Mondrian group coverage, CPS probabilities against crepes, the CGLS seen/unseen split, and fit-check parsing.
   \item \textbf{Smoke test:} the full pipeline on synthetic chest phantoms on a CPU in 10--20 minutes.
@@ -60,11 +111,17 @@ Git, GitHub & Version control & Team collaboration \\
   \item \textbf{Full run:} 583 patients with automatic checks after every step and an HTML report listing all checks.
 \end{enumerate}
 
-\paragraph{Data split.} Patients, not nodules, were split 60/20/20: 350 training, 117 calibration and 116 test patients. The diffusion model was selected on 10\% of the training patients held out, the detector on the calibration patients, and the conformal methods were calibrated on the calibration patients. Test patients were used only for the final tables.
+\subsection{Data Split and Evaluation Protocol}
+ Patients, not nodules, were split 60/20/20: 350 training, 117 calibration and 116 test patients. The diffusion model was selected on 10\% of the training patients held out, the detector on the calibration patients, and the conformal methods were calibrated on the calibration patients. Test patients were used only for the final tables.
 
-\paragraph{Metrics and baselines.} Volume and mass error (median signed error, median absolute percentage error MdAPE, Bland--Altman limits), failure rate, nodule-box PSNR, interval coverage and median width, Brier score and expected calibration error (ECE) of category probabilities, doubling-time error and NELSON category accuracy, detection CPM and sensitivity, seen fraction and unseen skill, and run time. Baselines: 2D diameter converted to a sphere volume (clinical practice), coarse SIRT, prism ROI-SIRT, physics-only Gaussians, and diffusion without Gaussians.
+\subsection{Metrics and Baselines}
+ Volume and mass error (median signed error, median absolute percentage error MdAPE, Bland--Altman limits), failure rate, nodule-box PSNR, interval coverage and median width, Brier score and expected calibration error (ECE) of category probabilities, doubling-time error and NELSON category accuracy, detection CPM and sensitivity, seen fraction and unseen skill, and run time. Baselines: 2D diameter converted to a sphere volume (clinical practice), coarse SIRT, prism ROI-SIRT, physics-only Gaussians, and diffusion without Gaussians.
 
-\paragraph{Requirement verification.} \Cref{tab:verify} traces every requirement of \cref{tab:fr,tab:nfr} to its measured result.
+\subsection{Requirement Verification}
+
+Each requirement in \cref{tab:fr,tab:nfr} was checked by the step named in its last column; the check prints the measured value next to the expected one. \Cref{tab:verify} lists every requirement with its measured result. Thirteen of the sixteen rows are met by automatic checks; the three rows that depend on the measurement results (FR-07, FR-08 and FR-09) are completed in \cref{sec:resultsdisc}.
+
+ \Cref{tab:verify} traces every requirement of \cref{tab:fr,tab:nfr} to its measured result.
 
 {\small
 \begin{longtable}{>{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}p{1.3cm}}
@@ -97,32 +154,13 @@ NFR-05 & No bare numbers & Every value has an interval and a low-confidence flag
 \end{longtable}
 }
 
-\paragraph{Issues found and fixed.} (1) Without a depth support, SIRT placed attenuation in the air around the patient and the prism lost a third of its attenuation as false background; fixed by confining SIRT to the patient. (2) The training-free detector mostly found end-on vessels (recall in the top 10 of 6\% in the pilot); replaced by the learned detector. (3) A first CPS implementation capped probabilities at $n/(n+1)$; fixed with the smoothed mid-point p-value and verified against crepes. (4) In step~10 the asymmetric split-conformal upper bound for some methods became effectively unbounded because calibration nodules where a method found nothing (measured volume $\approx 0$) produce unbounded log-ratios. \fillme{state the resolution: failed measurements excluded from calibration and reported as failures, or step-16 CPS intervals used instead} (5) The HTML report lists three failed checks. \fillme{name and explain the three failed checks}
+\subsection{Issues Found and Fixed}
+ (1) Without a depth support, SIRT placed attenuation in the air around the patient and the prism lost a third of its attenuation as false background; fixed by confining SIRT to the patient. (2) The training-free detector mostly found end-on vessels (recall in the top 10 of 6\% in the pilot); replaced by the learned detector. (3) A first CPS implementation capped probabilities at $n/(n+1)$; fixed with the smoothed mid-point p-value and verified against crepes. (4) In step~10 the asymmetric split-conformal upper bound for some methods became effectively unbounded because calibration nodules where a method found nothing (measured volume $\approx 0$) produce unbounded log-ratios. \fillme{state the resolution: failed measurements excluded from calibration and reported as failures, or step-16 CPS intervals used instead} (5) The HTML report lists three failed checks. \fillme{name and explain the three failed checks}
 
 \section{Results and Discussion}
+\label{sec:resultsdisc}
 
-\subsection{Dataset}
-
-\begin{table}[htbp]
-\centering\small
-\caption{Dataset characteristics.}
-\label{tab:data}
-\begin{adjustbox}{max width=\linewidth}
-\begin{tabular}{lr}
-\toprule
-Item & Value \\
-\midrule
-LIDC-IDRI patients ($\geq$1 nodule of 4--30~mm marked by $\geq$3 readers, slices $\leq$2.5~mm) & 583 \\
-Nodules & \num{1144} \\
-Train / calibration / test patients & 350 / 117 / 116 \\
-Test nodules (detector evaluation) & 225 in 116 scans \\
-Nodules measured in step 09 & \fillme{cal / test} \\
-Consensus volume / mean reader volume & 0.81 \\
-Single-view nodule contrast-to-noise ratio (median) & 3.3 \\
-\bottomrule
-\end{tabular}
-\end{adjustbox}
-\end{table}
+The results are presented in the order of the pipeline: the training and fit of the diffusion prior, nodule detection, measurement accuracy (H1, H2), calibrated uncertainty (H3, H5), growth (H4) and explainability (H6), followed by the sensitivity to the acquisition geometry and the run time and cost of the full study.
 
 \subsection{Diffusion Prior Training and Fit}
 
@@ -132,7 +170,7 @@ Training ran for \num{27610} steps within its 6-hour budget (batch 8, about 0.77
 
 \subsection{Nodule Detection}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Nodule detection on the 116 test patients (225 nodules).}
 \label{tab:detection}
@@ -155,7 +193,10 @@ The learned detector is 17 times better than the training-free baseline by CPM (
 
 \subsection{Measurement Accuracy (H1, H2)}
 
-\begin{table}[htbp]
+Each test nodule was measured by six methods: the clinical 2D diameter converted to a sphere volume, the coarse whole-chest SIRT, the prism ROI-SIRT, physics-only Gaussians, the diffusion prior without Gaussians, and the full method (diffusion prior with Gaussians). Volumes are compared with the radiologists' consensus volume and masses with the CT mass inside the consensus mask plus a 1~mm rim. We report the median absolute percentage error (MdAPE), which is robust to the few very large errors on tiny nodules, the median signed error (bias), and the failure rate, the share of nodules where a method found nothing at the click (volume $\leq 1$~mm$^3$). H1 is supported if mass has a smaller MdAPE than volume for the reconstruction methods; H2 is supported if the full method has a smaller volume MdAPE than the physics-only methods.
+
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Measurement error on test nodules against the radiologist consensus. \fillme{copy from outputs/10\_evaluation/table\_accuracy.md}}
 \label{tab:accuracy}
@@ -190,6 +231,9 @@ Diffusion + Gaussians (ours) & \fillme{} & \fillme{} & \fillme{} \\
 \resultfig[0.75\linewidth]{reliability.png}{Reliability diagram of the calibrated EUPS category probabilities against the raw ensemble vote (step 16).}{fig:reliability}
 
 \subsection{Growth (H4)}
+
+For the growth experiment each test nodule was enlarged inside the CT by a known factor, corresponding to a known true doubling time, and a follow-up DTS acquisition was simulated with fresh noise. Both acquisitions were measured with the same method, and VDT and MDT were computed from the volume and mass ratios and assigned to the NELSON categories ($<400$, 400--600 and $>600$ days). We report the median absolute error of the doubling times and the accuracy of the category assignment.
+
 
 \fillme{copy outputs/11\_growth/table\_growth.md: VDT and MDT errors and NELSON category accuracy}
 

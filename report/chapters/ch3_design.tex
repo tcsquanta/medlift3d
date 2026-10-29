@@ -7,7 +7,7 @@ This chapter turns the problem into requirements, models the system with context
 
 \paragraph{Requirements elicitation.} Requirements were gathered from four sources: (i) the clinical guidelines that radiologists follow for nodules, namely the EUPS volume categories and the NELSON doubling-time categories~\cite{oudkerk2017eups,horeweg2014nelson}; (ii) meetings with our supervisor; (iii) the published limits of DTS and sparse-view reconstruction (\cref{ch:background}); and (iv) the constraints of a student project: public data only, no clinical scanner, a budget of tens of dollars and a fixed deadline. \Cref{tab:stakeholders} lists the stakeholders and their needs.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Stakeholders and their needs.}
 \label{tab:stakeholders}
@@ -25,7 +25,7 @@ Examiner / researcher & Claims that can be checked & Every step ends in PASS/FAI
 
 \paragraph{Requirements analysis and negotiation.} Several requirements conflict; \cref{tab:conflicts} records how each conflict was resolved.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Conflicting requirements and their resolution.}
 \label{tab:conflicts}
@@ -45,7 +45,7 @@ Automatic detection vs false positives & The detector only suggests; the clinici
 
 \subsection{Functional and Nonfunctional Requirements}
 
-Each requirement has a measurable acceptance criterion and the pipeline step that checks it (\cref{tab:fr,tab:nfr}); \cref{ch:results} reports the result for every row.
+Functional requirements state what the system must do, from loading the data to producing the report; nonfunctional requirements state the qualities it must have: speed, cost, reproducibility, validity, safety, usability, portability and privacy. Each requirement has a measurable acceptance criterion and the pipeline step that checks it (\cref{tab:fr,tab:nfr}). The criteria were chosen so that a step script can check them automatically, which makes the verification in \cref{ch:results} independent of anyone's judgement; \cref{tab:verify} reports the result for every row.
 
 {\small
 \begin{longtable}{>{\raggedright\arraybackslash}p{1.1cm} >{\raggedright\arraybackslash}p{6.2cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}p{1.6cm}}
@@ -73,7 +73,7 @@ FR-11 & Interactive click-to-3D application and HTML report of all results & Dem
 \end{longtable}
 }
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Nonfunctional requirements.}
 \label{tab:nfr}
@@ -95,7 +95,7 @@ NFR-08 Privacy & No identifiable patient data & Only de-identified public TCIA d
 
 \subsection{Context Diagram}
 
-The context diagram (\cref{fig:context}) shows MedLift-3D as a single process with its external entities. At run time the clinician is the only actor; the TCIA archive and the cloud GPU provider are needed to build and evaluate the models.
+The context diagram (\cref{fig:context}) shows MedLift-3D as a single process with its external entities. At run time the clinician is the only actor: they send a case, a click and a depth, and receive the measurement report. The TCIA archive supplies CT scans with the radiologists' annotations, and the cloud GPU provider runs the training and evaluation jobs and returns the trained models and results; both are needed to build and evaluate the system, not to use it.
 
 \begin{figure}[htbp]
   \centering
@@ -106,7 +106,7 @@ The context diagram (\cref{fig:context}) shows MedLift-3D as a single process wi
 
 \subsection{Data Flow Diagram Level 1}
 
-The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and four data stores. The upper row runs once to build the cases, train the models and calibrate them; the lower row runs for every click and reads all four stores. \Cref{tab:dict} is the data dictionary and \cref{fig:fdd} the functional decomposition.
+The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and four data stores. The upper row runs once to build the cases, train the models and calibrate them; the lower row runs for every click and reads all four stores. \Cref{sec:method} gives the functional decomposition, the entity-relationship model and the data dictionary.
 
 \begin{figure}[htbp]
   \centering
@@ -115,7 +115,49 @@ The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and
   \label{fig:dfd1}
 \end{figure}
 
-\begin{table}[htbp]
+
+
+
+
+\subsection{UI Design}
+
+The interface is a browser application built around one action: click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice with detector suggestions, annotated nodules (for evaluation) and the click; (3) the depth slider, which supplies the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up that reports VDT and MDT.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_ui}}
+  \caption{User interface design of the click-to-3D application.}
+  \label{fig:ui}
+\end{figure}
+
+\section{Detailed Methodology and Design}
+\label{sec:method}
+
+This section decomposes the system into its functions and data, derives what DTS can measure, and describes the proposed architecture, the network and the alternatives considered.
+
+\subsection{Functional Decomposition Diagram}
+
+The system decomposes into five subsystems (\cref{fig:fdd}). \emph{Data and simulation} selects the patients, downloads their CT, builds the cases and simulates DTS. \emph{Reconstruction} produces the whole-chest SIRT with depth support and the prism around a click. \emph{Learned models} contains the conditional diffusion prior with its data-consistency sampler, the nodule detector and the fit check. \emph{Measurement and UQ} fits Gaussians, measures mass, volume and diameter, and calibrates intervals and category probabilities. \emph{Interface and reporting} provides the click-to-3D application, the virtual follow-up, the explanations and the HTML report. Each function maps to one or more of the 18 scripted steps, so every box can be checked by its PASS/FAIL output.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_fdd}}
+  \caption{Functional decomposition diagram: five subsystems and their functions.}
+  \label{fig:fdd}
+\end{figure}
+
+\subsection{Entity-Relationship Model and Data Dictionary}
+
+\Cref{fig:er} shows the data entities and their relationships: a patient has CT cases, a case contains nodules marked by three or four readers, and each nodule is measured by several methods, each measurement aggregating eight hypotheses that are fitted by Gaussian sets and calibrated per method. \Cref{tab:dict} gives the data dictionary.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/fig_er}}
+  \caption{Entity-relationship model of MedLift-3D (keys underlined, cardinalities in blue).}
+  \label{fig:er}
+\end{figure}
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Data dictionary.}
 \label{tab:dict}
@@ -138,28 +180,19 @@ Report & JSON / UI & Mass and volume with intervals, category probabilities, dia
 \end{tabularx}
 \end{table}
 
-\begin{figure}[htbp]
-  \centering
-  \resizebox{\linewidth}{!}{\input{figures/fig_fdd}}
-  \caption{Functional decomposition diagram: five subsystems and their functions.}
-  \label{fig:fdd}
-\end{figure}
+\subsection{What DTS Can Measure}
 
-\subsection{UI Design}
+Let $f(x,y,z)$ be the nodule's excess attenuation, with $y$ the depth axis, and let the view at tube angle $\theta$ project along a direction tilted by $\theta$ from $y$ in the $y$--$z$ plane, with detector coordinates $(x, v)$ and $v$ along $\mathbf{e}_\theta = (0, -\sin\theta, \cos\theta)$. The moments of the projection $p_\theta$ are
+\begin{align}
+  \iint p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= M, \label{eq:m0}\\
+  \iint v\, p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= -\sin\theta\, M y_c + \cos\theta\, M z_c, \label{eq:m1}\\
+  \iint (v-\bar v)^2 p_\theta\,\mathrm{d}x\,\mathrm{d}v &= \sin^2\theta\, S_{yy} - 2\sin\theta\cos\theta\, S_{yz} + \cos^2\theta\, S_{zz}, \label{eq:m2}
+\end{align}
+where $M$ is the mass, $(y_c,z_c)$ the centroid and $S$ the second central moments (for a cone beam, \cref{eq:m0} holds up to a known magnification factor). Every view gives the mass directly (\cref{eq:m0}). The depth position enters only through $\sin\theta \leq \sin 15^\circ$, making it $1/\sin15^\circ \approx 3.9$ times worse conditioned than in-plane position, and the depth extent $S_{yy}$, which volume needs, enters through $\sin^2\theta$, about $1/\sin^2 15^\circ \approx 15$ times worse. Step~01 confirms this numerically: the detector integral matched the mass to 0.03\% in all 15 views, and an object three times deeper with equal mass gave the same integrals.
 
-The interface is a browser application built around one action: click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice with detector suggestions, annotated nodules (for evaluation) and the click; (3) the depth slider, which supplies the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up that reports VDT and MDT.
+\subsection{Proposed Architecture}
 
-\begin{figure}[htbp]
-  \centering
-  \resizebox{\linewidth}{!}{\input{figures/fig_ui}}
-  \caption{User interface design of the click-to-3D application.}
-  \label{fig:ui}
-\end{figure}
-
-\section{Detailed Methodology and Design}
-\label{sec:method}
-
-\Cref{fig:pipeline} gives an overview of the method; the stages are described below.
+\Cref{fig:pipeline} gives an overview of the method; its stages are described below.
 
 \begin{figure}[htbp]
   \centering
@@ -167,14 +200,6 @@ The interface is a browser application built around one action: click on the nod
   \caption[MedLift-3D method overview]{MedLift-3D method overview. (A) Physics: low-dose DTS is simulated, reconstructed and cut to a prism around the click. (B) A conditional 3D diffusion prior generates eight hypotheses of the prism, each kept consistent with the X-rays. (C) Gaussians give closed-form mass; the eight measurements are calibrated into intervals and category probabilities.}
   \label{fig:pipeline}
 \end{figure}
-
-\paragraph{Stage 0: what DTS can measure.} Let $f(x,y,z)$ be the nodule's excess attenuation, with $y$ the depth axis, and let the view at tube angle $\theta$ project along a direction tilted by $\theta$ from $y$ in the $y$--$z$ plane, with detector coordinates $(x, v)$ and $v$ along $\mathbf{e}_\theta = (0, -\sin\theta, \cos\theta)$. The moments of the projection $p_\theta$ are
-\begin{align}
-  \iint p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= M, \label{eq:m0}\\
-  \iint v\, p_\theta(x,v)\,\mathrm{d}x\,\mathrm{d}v &= -\sin\theta\, M y_c + \cos\theta\, M z_c, \label{eq:m1}\\
-  \iint (v-\bar v)^2 p_\theta\,\mathrm{d}x\,\mathrm{d}v &= \sin^2\theta\, S_{yy} - 2\sin\theta\cos\theta\, S_{yz} + \cos^2\theta\, S_{zz}, \label{eq:m2}
-\end{align}
-where $M$ is the mass, $(y_c,z_c)$ the centroid and $S$ the second central moments (for a cone beam, \cref{eq:m0} holds up to a known magnification factor). Every view gives the mass directly (\cref{eq:m0}). The depth position enters only through $\sin\theta \leq \sin 15^\circ$, making it $1/\sin15^\circ \approx 3.9$ times worse conditioned than in-plane position, and the depth extent $S_{yy}$, which volume needs, enters through $\sin^2\theta$, about $1/\sin^2 15^\circ \approx 15$ times worse. Step~01 confirms this numerically: the detector integral matched the mass to 0.03\% in all 15 views, and an object three times deeper with equal mass gave the same integrals.
 
 \paragraph{Stage 1: simulated low-dose DTS.} The CT table is removed, then 15 views over $\pm15^\circ$ are simulated at CT resolution with 0.5~mm ray sampling, SID 1800~mm, a 43~cm flat panel with 0.8~mm pixels, monochromatic attenuation and Poisson noise at $I_0 = 2\times10^4$. The geometry matches the GE VolumeRAD sweep; reconstruction uses different grids than simulation to avoid the inverse crime.
 
@@ -190,12 +215,7 @@ where $M$ is the mass, $(y_c,z_c)$ the centroid and $S$ the second central momen
 \end{equation}
 before the next DDIM step. Eight samples give eight hypotheses that agree with the X-rays but differ where the X-rays are blind.
 
-\begin{figure}[htbp]
-  \centering
-  \resizebox{0.95\linewidth}{!}{\input{figures/fig_unet}}
-  \caption[Conditional 3D U-Net of the diffusion prior]{Conditional 3D U-Net of the diffusion prior. The noisy prism $\mathbf{x}_t$ is concatenated with the DTS condition $\mathbf{c}$; the timestep embedding is added in every residual block; the network predicts the velocity $\hat{\mathbf{v}}_\theta$.}
-  \label{fig:unet}
-\end{figure}
+
 
 \paragraph{Stage 6: 3D Gaussians and measurement.} For each hypothesis the nodule box ($40\times50\times40$~mm) is fitted with anisotropic Gaussians (100 fitting and 100 refinement iterations against the measured projections, the rest of the prism fixed). A seeded half-maximum segmentation, confined to a plausible nodule extent, gives the volume; \cref{eq:gaussmass} gives the mass; and the long-axis 2D diameter is kept as the clinical baseline.
 
@@ -205,9 +225,22 @@ before the next DDIM step. Eight samples give eight hypotheses that agree with t
 
 \paragraph{Stage 9: explanation.} The true CT prism is split into seen and unseen parts by conjugate-gradient least squares (CGLS)~\cite{hestenes1952cg} on the prism projection operator. We measure how much of the nodule's mass and shape lies in each part and the prior's \emph{unseen skill}, the correlation of its unseen content with the truth's (\cref{fig:seen}). Input$\times$gradient saliency explains the detector, and rank correlations relate the measurement error to nodule size, depth and contrast.
 
-\paragraph{Alternatives considered.} \Cref{tab:alternatives} lists the alternatives and why they were rejected. The first design of this project, explored in the earlier FYDP phases, generated whole $512^3$ volumes with a latent diffusion model; it is included in the table because its lessons shaped the final design: a large generator judged by training losses could not show whether a single nodule measurement was right, so FYDP-III narrowed the goal to clinical numbers that can be verified.
+\subsection{Diffusion Network Architecture}
 
-\begin{table}[htbp]
+\Cref{fig:unet} shows the conditional 3D U-Net. The noisy prism and the DTS condition enter as two channels; four resolution levels with 32, 64, 128 and 128 channels use two residual blocks each in the encoder and three in the decoder, with skip connections between them; multi-head self-attention runs at the coarsest level ($8{\times}16{\times}8$) and in the bottleneck; and a sinusoidal timestep embedding passed through an MLP is added inside every residual block. The output layer is initialised to zero so that training starts from a stable state.
+
+\begin{figure}[htbp]
+  \centering
+  \resizebox{0.95\linewidth}{!}{\input{figures/fig_unet}}
+  \caption[Conditional 3D U-Net of the diffusion prior]{Conditional 3D U-Net of the diffusion prior. The noisy prism $\mathbf{x}_t$ is concatenated with the DTS condition $\mathbf{c}$; the timestep embedding is added in every residual block; the network predicts the velocity $\hat{\mathbf{v}}_\theta$.}
+  \label{fig:unet}
+\end{figure}
+
+\subsection{Alternative Solutions}
+
+ \Cref{tab:alternatives} lists the alternatives and why they were rejected. The first design of this project, explored in the earlier FYDP phases, generated whole $512^3$ volumes with a latent diffusion model; it is included in the table because its lessons shaped the final design: a large generator judged by training losses could not show whether a single nodule measurement was right, so FYDP-III narrowed the goal to clinical numbers that can be verified.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Alternative solutions and the rationale for the selected design.}
 \label{tab:alternatives}
@@ -240,9 +273,9 @@ The FYDP-III work was organised in three overlapping streams over the trimester 
 
 \section{Task Allocation}
 
-\Cref{tab:tasks} gives the responsibilities of each team member in FYDP-III. \fillme{confirm or correct the allocation}
+Responsibilities were allocated by each member's strengths so that the three main streams (the learned models, the computing and data infrastructure, and the application with its evaluation) could progress in parallel. Each pipeline step has one owner who is accountable for its PASS/FAIL checks, and all members reviewed every step before the full run. Work was coordinated through a shared Git repository. \Cref{tab:tasks} gives the responsibilities of each team member in FYDP-III. \fillme{confirm or correct the allocation}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Task allocation matrix.}
 \label{tab:tasks}

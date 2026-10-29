@@ -5,9 +5,13 @@ This chapter lists the standards MedLift-3D follows, with the alternatives consi
 
 \section{Compliance with the Standards}
 
+MedLift-3D is research software intended to become medical-device software, so we followed the standards that such software must eventually meet, even where formal certification is out of scope for a student project. For each standard we state how it is applied, which alternatives were considered with their pros and cons, and why it was selected. The standards are grouped into software, hardware and communication standards.
+
 \subsection{Software Standards}
 
-\begin{table}[htbp]
+The software standards cover data formats, the software life cycle, risk and quality management, code quality, numerical precision and licensing (\cref{tab:swstd}). DICOM is the format in which hospitals store and exchange images, so the input path reads DICOM directly and checks its geometry; intermediate data use compressed NumPy files with JSON headers because they hold each case's volume, masks and metadata in one self-describing file. IEC 62304 defines the life-cycle processes for medical device software; we are not certified, but we followed its core practices: every requirement is traced to a test, all code is under version control, 69 unit tests run automatically, and anomalies found during development are documented (\cref{ch:results}). ISO 14971 risk management is applied through the hazard analysis in \cref{tab:risk}, while ISO 13485 quality management is identified as necessary for a future product. IEEE 754 arithmetic is used deliberately: physics and measurement run in 32-bit precision and only the diffusion network uses bf16, which keeps the 32-bit range and avoids the overflow that fp16 causes in 3D networks. Finally, all data and libraries are used under open licences with attribution.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Software standards.}
 \label{tab:swstd}
@@ -29,7 +33,9 @@ Open licences & LIDC-IDRI under CC BY 3.0 with citation~\cite{tcia_policy}; PyTo
 
 \subsection{Hardware Standards}
 
-\begin{table}[htbp]
+MedLift-3D is software, so the hardware standards concern the computing platform and the X-ray equipment that would produce real data (\cref{tab:hwstd}). All GPU work uses NVIDIA's CUDA platform through PyTorch, because CUDA GPUs are the ones offered by every cloud provider we could afford; AMD's ROCm platform is an open alternative but is rarely available for rent. The safety of the X-ray equipment itself is governed by IEC 60601-1 and its part 2-54 for radiography; these apply to the DTS unit, not to our software, and a clinical deployment would rely on a certified unit. Radiation doses are compared as effective dose following ICRP Publication 103, the standard measure of patient risk.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Hardware standards.}
 \label{tab:hwstd}
@@ -46,7 +52,9 @@ ICRP 103 effective dose~\cite{icrp103} & Doses compared in mSv for CT, low-dose 
 
 \subsection{Communication Standards}
 
-\begin{table}[htbp]
+The communication standards concern how the application is reached and how results are exchanged (\cref{tab:commstd}). The application runs as a web server and is reached over HTTP locally and over an encrypted HTTPS tunnel from outside, so any modern browser can use it without installing software; the usual Gradio share link failed on Kaggle, and SSH port forwarding would require setup on the client. Reports, results and calibration files are written as JSON, which is human-readable and language-neutral, unlike Python pickle files, which are unsafe to load from untrusted sources. Integration with hospital systems would use DICOM networking for images and HL7 FHIR for reports, the standards used by picture archiving and electronic record systems.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Communication standards.}
 \label{tab:commstd}
@@ -62,6 +70,8 @@ DICOM networking, HL7 FHIR & Future integration with hospital PACS and records &
 \end{table}
 
 \section{Design Constraints}
+
+The design was shaped by economic, environmental, ethical, health and safety, social, political, sustainability, legal and cultural constraints. Each is discussed below together with its effect on the design and the measures taken.
 
 \subsection{Economic Constraint}
 
@@ -96,7 +106,7 @@ The project had no external funding, so all computation had to fit a student bud
 
 \paragraph{Actionable solutions.} Every number is reported with a calibrated interval and category probabilities so that the clinician sees when a result is uncertain; a low-confidence flag recommends CT; and results should be explained to patients by the clinician in categories rather than raw numbers. \Cref{tab:risk} lists the main hazards.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Safety risk analysis (ISO 14971 style).}
 \label{tab:risk}
@@ -151,7 +161,7 @@ Adoption of health technology depends on public health policy and procurement. I
 
 \paragraph{Actual project budget.} \Cref{tab:budget} gives the actual cost of FYDP-III (exchange rate assumed: US\$1 $\approx$ BDT 120).
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Actual project budget.}
 \label{tab:budget}
@@ -175,7 +185,7 @@ LIDC-IDRI data and open-source software & 0 & 0 \\
 
 \paragraph{Revenue model (illustrative).} For a commercial version, assume 18 months of validation and registration and customers among diagnostic centres and hospitals with DTS-capable radiography (\cref{tab:revenue,tab:cashflow}).
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Illustrative revenue (BDT lakh).}
 \label{tab:revenue}
@@ -193,7 +203,7 @@ Hospital subscription (BDT 6 lakh per year) & 0 & 18 (3 hospitals) & 48 (8 hospi
 \end{adjustbox}
 \end{table}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Illustrative expenses and cash flow (BDT lakh).}
 \label{tab:cashflow}
@@ -224,7 +234,7 @@ MedLift-3D is a complex engineering problem: it is ill-posed by physics, combine
 
 \subsection{Complex Problem Solving}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Mapping with complex problem solving.}
 \label{tab:cep}
@@ -241,7 +251,7 @@ MedLift-3D is a complex engineering problem: it is ill-posed by physics, combine
 
 \paragraph{P1 -- Depth of knowledge.} The solution requires X-ray projection physics, linear algebra of range and null spaces, probabilistic diffusion models, conformal statistics and 3D deep learning, beyond the standard curriculum. \Cref{tab:wk} maps the knowledge profiles.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Knowledge profile mapping for P1.}
 \label{tab:wk}
@@ -275,7 +285,7 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 
 \subsection{Engineering Activities}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Mapping with complex engineering activities.}
 \label{tab:cea}

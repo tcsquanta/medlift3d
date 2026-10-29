@@ -14,13 +14,17 @@
 \usepackage{booktabs,tabularx,longtable,multirow,makecell,array}
 \usepackage{caption,subcaption}
 \usepackage{adjustbox}
+\usepackage{float}
+\usepackage[section]{placeins}
+% keep floats inside their own subsection
+\makeatletter\AtBeginDocument{\let\oldsubsection\subsection\renewcommand{\subsection}{\FloatBarrier\oldsubsection}}\makeatother
 \usepackage{enumitem}
 \usepackage{pifont}
 \usepackage{siunitx}
 \usepackage{fancyhdr}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shapes.misc,decorations.pathreplacing,patterns,3d,shadows}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shapes.misc,shapes.multipart,decorations.pathreplacing,patterns,3d,shadows}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \usepackage{pgfgantt}

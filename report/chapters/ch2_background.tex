@@ -5,15 +5,19 @@ This chapter gives the background needed for the rest of the report and reviews 
 
 \section{Preliminaries}
 
-\paragraph{X-ray projection and attenuation.} A detector pixel records the line integral of the linear attenuation coefficient $\mu$ along the ray from the source. With $I_0$ incident photons the expected count is
+This section introduces the physics of X-ray projection and tomosynthesis, iterative reconstruction and its null space, diffusion models, Gaussian representations and nodule mass, conformal prediction, and the explainability and detection metrics used in the rest of the report.
+
+\subsection{X-ray Projection and Digital Tomosynthesis}
+ A detector pixel records the line integral of the linear attenuation coefficient $\mu$ along the ray from the source. With $I_0$ incident photons the expected count is
 \begin{equation}
   \bar I = I_0 \exp\Big(-\int_{\text{ray}} \mu(\mathbf{r})\, \mathrm{d}l\Big), \qquad I \sim \mathrm{Poisson}(\bar I),
 \end{equation}
 so fewer photons (lower dose) mean more noise. CT values are expressed in Hounsfield units, $\mathrm{HU} = 1000\,(\mu-\mu_{\text{water}})/\mu_{\text{water}}$.
 
-\paragraph{Digital tomosynthesis and the missing wedge.} CT collects projections over \ang{180} or more. Chest DTS moves the tube along a short linear track, typically $\pm15^\circ$ (GE VolumeRAD) to $\pm20^\circ$ (Shimadzu SonialVision), with 15--74 views~\cite{dobbins2003dts}. By the Fourier slice theorem each view measures one plane of the object's 3D Fourier transform, so a narrow sweep leaves a wedge of depth frequencies unmeasured (\cref{fig:dts}b). Reconstructions are sharp in the coronal plane but every structure is smeared in depth.
+\paragraph{The missing wedge.} CT collects projections over \ang{180} or more. Chest DTS moves the tube along a short linear track, typically $\pm15^\circ$ (GE VolumeRAD) to $\pm20^\circ$ (Shimadzu SonialVision), with 15--74 views~\cite{dobbins2003dts}. By the Fourier slice theorem each view measures one plane of the object's 3D Fourier transform, so a narrow sweep leaves a wedge of depth frequencies unmeasured (\cref{fig:dts}b). Reconstructions are sharp in the coronal plane but every structure is smeared in depth.
 
-\paragraph{Iterative reconstruction (SIRT).} Writing the projection operator as $A$, the measured line integrals as $\mathbf{b}$ and the volume as $\mathbf{x}$, SIRT~\cite{gilbert1972sirt,herman2009} solves $A\mathbf{x}\approx\mathbf{b}$ by repeated normalised back-projection of the residual:
+\subsection{Iterative Reconstruction and the Null Space}
+ Writing the projection operator as $A$, the measured line integrals as $\mathbf{b}$ and the volume as $\mathbf{x}$, SIRT~\cite{gilbert1972sirt,herman2009} solves $A\mathbf{x}\approx\mathbf{b}$ by repeated normalised back-projection of the residual:
 \begin{equation}
   \mathbf{x}^{(k+1)} = \mathbf{x}^{(k)} + \lambda\, C A^{\top} R \big(\mathbf{b} - A\mathbf{x}^{(k)}\big),
 \end{equation}
@@ -28,7 +32,8 @@ where $R$ and $C$ hold the inverse row and column sums of $A$. It is stable unde
   \label{fig:seen}
 \end{figure}
 
-\paragraph{Denoising diffusion models.} A diffusion model learns to reverse a gradual noising process~\cite{ho2020ddpm}. With a cosine noise schedule $\bar\alpha_t$~\cite{nichol2021improved}, a noisy sample is
+\subsection{Denoising Diffusion Models}
+ A diffusion model learns to reverse a gradual noising process~\cite{ho2020ddpm}. With a cosine noise schedule $\bar\alpha_t$~\cite{nichol2021improved}, a noisy sample is
 \begin{equation}
   \mathbf{x}_t = \sqrt{\bar\alpha_t}\,\mathbf{x}_0 + \sqrt{1-\bar\alpha_t}\,\boldsymbol\epsilon, \qquad \boldsymbol\epsilon\sim\mathcal{N}(\mathbf{0},I).
 \end{equation}
@@ -38,7 +43,8 @@ We train the network to predict the velocity $\mathbf{v} = \sqrt{\bar\alpha_t}\,
 \end{equation}
 where the condition $\mathbf{c}$ is the DTS reconstruction, so the model learns $p(\mathbf{x}_0\mid\mathbf{c})$. DDIM~\cite{song2021ddim} samples in tens of steps instead of a thousand, and data-consistency (DC) sampling corrects every denoised estimate with the physics so that samples agree with the measurements~\cite{chung2023dps,chung2024dds}.
 
-\paragraph{3D Gaussian representations.} A volume can be written as a sum of anisotropic Gaussians with centres $\boldsymbol\mu_i$, covariances $\Sigma_i = R_i S_i S_i^{\top} R_i^{\top}$ and amplitudes $a_i$~\cite{kerbl2023gs,zha2024r2}:
+\subsection{3D Gaussian Representations and Nodule Mass}
+ A volume can be written as a sum of anisotropic Gaussians with centres $\boldsymbol\mu_i$, covariances $\Sigma_i = R_i S_i S_i^{\top} R_i^{\top}$ and amplitudes $a_i$~\cite{kerbl2023gs,zha2024r2}:
 \begin{equation}
   f(\mathbf{r}) = \sum_i a_i \exp\!\Big(-\tfrac12(\mathbf{r}-\boldsymbol\mu_i)^{\top}\Sigma_i^{-1}(\mathbf{r}-\boldsymbol\mu_i)\Big),
   \qquad
@@ -49,7 +55,8 @@ where $s_{i1},s_{i2},s_{i3}$ are the Gaussian's standard deviations. The mass is
 
 \paragraph{Nodule mass.} In this report mass is the nodule's excess attenuation over the surrounding lung, converted to milligrams with the CT density scale (about 0.7--0.85~mg/mm$^3$ on LIDC nodules). Mass doubling time is computed like VDT but from mass; it detects growth of part-solid nodules earlier~\cite{dehoop2010}.
 
-\paragraph{Conformal prediction.} Split conformal prediction~\cite{vovk2022alrw,angelopoulos2023} turns any predictor into intervals with a finite-sample guarantee: if calibration and test cases are exchangeable, a $(1-\alpha)$ interval contains the truth with probability at least $1-\alpha$. A \emph{normalised} version scales each interval by a difficulty estimate (here the spread of the diffusion hypotheses); a \emph{Mondrian} version calibrates within groups (here nodule size groups) so that coverage holds in every group; and \emph{conformal predictive systems} (CPS) return a full calibrated cumulative distribution for each case~\cite{vovk2019cps,bostrom2022crepes}, from which calibrated probabilities such as $P(V\geq 300~\text{mm}^3)$ follow. \Cref{fig:conformal} shows the procedure.
+\subsection{Conformal Prediction}
+ Split conformal prediction~\cite{vovk2022alrw,angelopoulos2023} turns any predictor into intervals with a finite-sample guarantee: if calibration and test cases are exchangeable, a $(1-\alpha)$ interval contains the truth with probability at least $1-\alpha$. A \emph{normalised} version scales each interval by a difficulty estimate (here the spread of the diffusion hypotheses); a \emph{Mondrian} version calibrates within groups (here nodule size groups) so that coverage holds in every group; and \emph{conformal predictive systems} (CPS) return a full calibrated cumulative distribution for each case~\cite{vovk2019cps,bostrom2022crepes}, from which calibrated probabilities such as $P(V\geq 300~\text{mm}^3)$ follow. \Cref{fig:conformal} shows the procedure.
 
 \begin{figure}[htbp]
   \centering
@@ -58,13 +65,18 @@ where $s_{i1},s_{i2},s_{i3}$ are the Gaussian's standard deviations. The mass is
   \label{fig:conformal}
 \end{figure}
 
-\paragraph{Explainability and detection metrics.} Input$\times$gradient saliency~\cite{shrikumar2017} multiplies each input voxel by the gradient of the output with respect to it, showing which voxels drove a detector's score. Detection is measured by the Competition Performance Metric (CPM), the mean sensitivity at 1/8, 1/4, 1/2, 1, 2, 4 and 8 false positives per scan~\cite{setio2017luna}.
+\subsection{Explainability and Detection Metrics}
+ Input$\times$gradient saliency~\cite{shrikumar2017} multiplies each input voxel by the gradient of the output with respect to it, showing which voxels drove a detector's score. Detection is measured by the Competition Performance Metric (CPM), the mean sensitivity at 1/8, 1/4, 1/2, 1, 2, 4 and 8 false positives per scan~\cite{setio2017luna}.
 
 \section{Literature Review}
 
+The review has two parts: applications that already address parts of the problem in practice, and research on radiation and screening, nodule measurement, chest DTS, deep priors for sparse-view reconstruction, Gaussian tomography, and trustworthiness and uncertainty.
+
 \subsection{Similar Applications}
 
-\begin{table}[htbp]
+Clinical practice already offers tools for parts of the problem, but none measures nodules in 3D from DTS. Chest DTS units from GE and Shimadzu produce coronal slices that radiologists read visually, and nodule size is judged by eye or by a diameter on a single slice. CT nodule software, from scanner vendors and AI companies, segments nodules and reports volume and doubling time, but only on CT. Detection systems such as those compared in the LUNA16 challenge suggest nodule locations without measuring them. General tools such as 3D Slicer and ITK-SNAP allow manual segmentation without any learned prior or uncertainty, and research codes for sparse-view reconstruction produce whole volumes for CT geometry and report image quality only. \Cref{tab:similar} summarises these applications and what each lacks for our problem.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Applications similar to MedLift-3D.}
 \label{tab:similar}
@@ -95,7 +107,7 @@ Research sparse-view reconstruction codes (R$^2$-Gaussian, 3DGR-CT)~\cite{zha202
 
 \paragraph{Trustworthiness and uncertainty.} Bhadra et al.~\cite{bhadra2021} defined hallucinations through the null space of the imaging operator, DDNM~\cite{wang2023ddnm} uses a range--null-space decomposition inside diffusion sampling, and Zhang et al.~\cite{zhang2025pail} used uncertainty estimates to suppress artifacts in limited-data CT. Conformal predictive systems are available in the open-source crepes library~\cite{bostrom2022crepes} but have not been applied to imaging biomarkers from DTS.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Summary of the most related research.}
 \label{tab:related}
@@ -122,7 +134,7 @@ Bostr\"om~\cite{bostrom2022crepes} & Conformal predictive systems & Valid CDFs f
 
 The review shows four gaps. First, DTS research stops at 2D detection and size; no work argues from the projection physics which 3D quantity DTS can measure. Second, generative sparse-view methods target whole CT volumes and image metrics, not a clinical number for one nodule, and none is built for the DTS sweep. Third, Gaussian tomography uses Gaussians for speed, not for closed-form mass. Fourth, reconstruction uncertainty is usually raw variance, which is not calibrated, and explanations of what a prior invented are not checked against the truth. \Cref{tab:gap} compares the closest works.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering\small
 \caption{Domain comparison: \cmark\ addressed, \xmark\ not addressed, $\circ$ partially.}
 \label{tab:gap}

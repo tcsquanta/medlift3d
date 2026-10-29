@@ -34,15 +34,21 @@ MedLift-3D turns one click on a low-dose chest tomosynthesis image into a 3D nod
 
 \section{Independent Learning and Reflection}
 
-\paragraph{Curiosity.} The project began as a generative-modelling idea, but we kept asking a deeper question: what can a \ang{30} X-ray sweep actually measure? Following that question into projection moments led to the mass-first design. The same curiosity made us ask whether the prior recovers or invents depth, which became the seen/unseen analysis, and when we found that raw ensemble spread is not a probability we studied conformal prediction until we could produce calibrated category probabilities.
+The project required knowledge and skills well beyond our coursework. This section reflects on that independent learning under five aspects: curiosity, self-initiative, independence, transfer of past learning, and reflection on what we learned.
 
-\paragraph{Self-initiative.} Beyond the required scope we added a learned detector after the training-free one mostly found vessels, a fit check to show that the prior does not overfit, conformal predictive systems with size-group calibration, explainability with a truth-referenced test, a geometry-sensitivity study to justify the 15-view choice, and an automatic HTML report so that every check is visible to examiners.
+\subsection{Curiosity}
+ The project began as a generative-modelling idea, but we kept asking a deeper question: what can a \ang{30} X-ray sweep actually measure? Following that question into projection moments led to the mass-first design. The same curiosity made us ask whether the prior recovers or invents depth, which became the seen/unseen analysis, and when we found that raw ensemble spread is not a probability we studied conformal prediction until we could produce calibrated category probabilities.
 
-\paragraph{Independence.} Outside the classroom we learned to run a 14-hour unattended job on rented cloud machines (CPU and GPU pods sharing a network volume, terminal multiplexing, resumable scripts and backups), to download and organise 64~GB of medical images from TCIA, to read radiologist annotations with pylidc, and to serve a GPU application from a Kaggle notebook through an HTTPS tunnel when the usual share link failed.
+\subsection{Self-initiative}
+ Beyond the required scope we added a learned detector after the training-free one mostly found vessels, a fit check to show that the prior does not overfit, conformal predictive systems with size-group calibration, explainability with a truth-referenced test, a geometry-sensitivity study to justify the 15-view choice, and an automatic HTML report so that every check is visible to examiners.
 
-\paragraph{Transfer of past learning.} \Cref{tab:transfer} shows how earlier coursework was applied.
+\subsection{Independence}
+ Outside the classroom we learned to run a 14-hour unattended job on rented cloud machines (CPU and GPU pods sharing a network volume, terminal multiplexing, resumable scripts and backups), to download and organise 64~GB of medical images from TCIA, to read radiologist annotations with pylidc, and to serve a GPU application from a Kaggle notebook through an HTTPS tunnel when the usual share link failed.
 
-\begin{table}[htbp]
+\subsection{Transfer of Past Learning}
+ Much of the project rests on knowledge from earlier courses applied to a problem none of them covered. Linear algebra became the tool for separating what the X-rays measure from what the prior supplies; calculus gave the moment argument that founded the design; probability and statistics became calibrated uncertainty; and software engineering became the discipline of a verified pipeline. \Cref{tab:transfer} lists how each area was applied.
+
+\begin{table}[!htbp]
 \centering\small
 \caption{Earlier coursework applied in MedLift-3D.}
 \label{tab:transfer}
@@ -63,4 +69,5 @@ Computer networks & HTTPS tunnels and port forwarding for the application \\
 \end{tabularx}
 \end{table}
 
-\paragraph{Reflection on learning.} Our main lesson was that a large architecture with falling training losses does not show that a single clinical measurement is right. Rebuilding the work around measurable clinical numbers, explicit hypotheses and automatic checks changed how we think about engineering: a result counts only if someone else can verify it, and a negative result reported honestly is worth more than a claim that cannot be tested. We also learned to work within real limits of time, money and data, to plan computation like a budget, and to treat uncertainty as part of the answer rather than an embarrassment. These habits, more than any single model, are what we take from the project into our careers.
+\subsection{Reflection on Learning}
+ Our main lesson was that a large architecture with falling training losses does not show that a single clinical measurement is right. Rebuilding the work around measurable clinical numbers, explicit hypotheses and automatic checks changed how we think about engineering: a result counts only if someone else can verify it, and a negative result reported honestly is worth more than a claim that cannot be tested. We also learned to work within real limits of time, money and data, to plan computation like a budget, and to treat uncertainty as part of the answer rather than an embarrassment. These habits, more than any single model, are what we take from the project into our careers.

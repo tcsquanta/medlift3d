@@ -1,0 +1,29 @@
+% Entity-relationship model (crow's-foot style cardinalities as labels)
+\begin{tikzpicture}[font=\scriptsize,
+    ent/.style={draw=edge, fill=white, rectangle split, rectangle split parts=2, rectangle split part fill={accentlight,white},
+                align=left, text width=3.3cm, inner sep=3pt},
+    rel/.style={edge, thick},
+    card/.style={font=\scriptsize\bfseries, text=accent}]
+  \node[ent] (pat) at (0,0) {\textbf{Patient}\nodepart{second}\underline{patient\_id}\\ split (train/cal/test)};
+  \node[ent] (case) at (5.0,0) {\textbf{CT Case}\nodepart{second}\underline{case\_id}\\ patient\_id (FK)\\ HU volume\\ voxel geometry};
+  \node[ent] (nod) at (10.0,0) {\textbf{Nodule}\nodepart{second}\underline{nid}\\ case\_id (FK)\\ consensus mask\\ diameter\\ GT volume, GT mass};
+  \node[ent] (rdr) at (15.0,0) {\textbf{Reader Annotation}\nodepart{second}\underline{nid, reader}\\ reader mask\\ malignancy rating};
+  \node[ent] (dts) at (5.0,-3.4) {\textbf{DTS Acquisition}\nodepart{second}\underline{case\_id}\\ 15 projections, angles\\ $I_0$, SIRT volume};
+  \node[ent] (meas) at (10.0,-3.4) {\textbf{Measurement}\nodepart{second}\underline{nid, method}\\ volume, mass, diameter\\ log-spread $\hat\sigma$\\ interval $[\ell,u]$};
+  \node[ent] (hyp) at (15.0,-3.4) {\textbf{Hypothesis}\nodepart{second}\underline{nid, method, k}\\ prism sample\\ volume, mass};
+  \node[ent] (gau) at (15.0,-6.6) {\textbf{Gaussian Set}\nodepart{second}\underline{nid, method, k}\\ centres, scales,\\ rotations, amplitudes};
+  \node[ent] (cal) at (10.0,-6.6) {\textbf{Calibration}\nodepart{second}\underline{method}\\ residuals, spreads\\ $\sigma$ floor};
+  \node[ent] (mdl) at (5.0,-6.6) {\textbf{Model}\nodepart{second}\underline{name}\\ diffusion prior\\ or detector\\ weights, training log};
+
+  \draw[rel] (pat) -- node[card, above, pos=0.15] {1} node[card, above, pos=0.85] {N} node[below, text=quiet] {has} (case);
+  \draw[rel] (case) -- node[card, above, pos=0.15] {1} node[card, above, pos=0.85] {N} node[below, text=quiet] {contains} (nod);
+  \draw[rel] (nod) -- node[card, above, pos=0.15] {1} node[card, above, pos=0.85] {3..4} node[below, text=quiet] {marked by} (rdr);
+  \draw[rel] (case) -- node[card, right, pos=0.2] {1} node[card, right, pos=0.8] {1} node[left, text=quiet] {simulated as} (dts);
+  \draw[rel] (nod) -- node[card, right, pos=0.2] {1} node[card, right, pos=0.8] {N} node[left, text=quiet] {measured by} (meas);
+  \draw[rel] (meas) -- node[card, above, pos=0.15] {1} node[card, above, pos=0.85] {8} node[below, text=quiet] {aggregates} (hyp);
+  \draw[rel] (hyp) -- node[card, right, pos=0.2] {1} node[card, right, pos=0.8] {1} node[left, text=quiet] {fitted by} (gau);
+  \draw[rel] (cal) -- node[card, right, pos=0.2] {1} node[card, right, pos=0.8] {N} node[left, text=quiet] {calibrates} (meas);
+  \draw[rel, rounded corners=4pt] (mdl.south) -- ++(0,-0.6) -| node[card, right, pos=0.97] {N} node[below, pos=0.25, text=quiet] {generates} ($(gau.east)+(0.45,0)$) |- (hyp.east);
+  \node[card, right] at ($(mdl.south)+(0,-0.3)$) {1};
+  \draw[rel] (dts) -- node[card, above, pos=0.15] {1} node[card, above, pos=0.85] {N} node[below, text=quiet] {input to} (meas);
+\end{tikzpicture}

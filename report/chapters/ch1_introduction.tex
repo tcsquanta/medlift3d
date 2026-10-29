@@ -22,15 +22,22 @@ Digital chest tomosynthesis (DTS) acquires 15--74 low-dose X-ray views during a 
 
 \section{Motivation}
 
-\paragraph{Clinical importance.} Five-year survival falls from 64\% for localised lung cancer to 9\% for distant disease~\cite{who2023lung,nlst2011}. Growth is the key sign separating malignant from benign nodules, and guidelines act on volume and doubling-time categories: $<100$, 100--300 and $\geq 300$~mm$^3$, and $<400$, 400--600 and $>600$ days~\cite{oudkerk2017eups,horeweg2014nelson}.
+Four observations motivate this project: nodules must be followed over time, 2D measurement of their size is unreliable, CT follow-up costs radiation and access, and existing reconstruction methods cannot give trustworthy numbers from DTS. A fifth, computational observation shapes the approach we take.
 
-\paragraph{Limits of 2D measurement.} Diameters measured on single slices assume a sphere. Volumes estimated from 2D measurements differ from 3D volumetry by 47--85\% on average~\cite{demargerie2018}, 2D measurements of small nodules are unreliable~\cite{revel2004twod}, and a 1~mm change in diameter is a 33\% change in volume~\cite{lee2025volumetry}. Measurement error larger than the true growth delays treatment.
+\subsection{Clinical Importance of Nodule Follow-up}
+ Five-year survival falls from 64\% for localised lung cancer to 9\% for distant disease~\cite{who2023lung,nlst2011}. Growth is the key sign separating malignant from benign nodules, and guidelines act on volume and doubling-time categories: $<100$, 100--300 and $\geq 300$~mm$^3$, and $<400$, 400--600 and $>600$ days~\cite{oudkerk2017eups,horeweg2014nelson}.
 
-\paragraph{Radiation and access.} CT follow-up means repeated dose and requires well-equipped centres~\cite{mascalchi2017,brenner2007ct}. DTS is cheaper, faster and much lower in dose, but has no trustworthy 3D measurement.
+\subsection{Limits of 2D Measurement}
+ Diameters measured on single slices assume a sphere. Volumes estimated from 2D measurements differ from 3D volumetry by 47--85\% on average~\cite{demargerie2018}, 2D measurements of small nodules are unreliable~\cite{revel2004twod}, and a 1~mm change in diameter is a 33\% change in volume~\cite{lee2025volumetry}. Measurement error larger than the true growth delays treatment.
 
-\paragraph{Why existing reconstruction and AI are not enough.} Iterative reconstruction from a \ang{30} sweep smears each nodule 3--5 times longer in depth than in-plane (we measured a median ratio of 3.5 on LIDC nodules). Generative models can fill the missing wedge, but a model that invents anatomy is dangerous for cancer follow-up~\cite{bhadra2021,zhang2025pail}. Published sparse-view methods report image quality (PSNR, SSIM) rather than calibrated clinical numbers, and none is built for DTS geometry.
+\subsection{Radiation and Access}
+ CT follow-up means repeated dose and requires well-equipped centres~\cite{mascalchi2017,brenner2007ct}. In Bangladesh, CT scanners are concentrated in divisional cities and large hospitals, so many patients travel long distances and pay for every follow-up scan, while digital radiography rooms, which can be upgraded to tomosynthesis, are far more widespread. DTS is cheaper, faster and much lower in dose than CT, but today it offers no trustworthy 3D measurement, so a nodule found on DTS is still sent to CT for every follow-up.
 
-\paragraph{Computational motivation.} We asked what DTS can \emph{measure}, not only what it can show. A derivation from projection moments (\cref{sec:method}) shows that every DTS view measures a nodule's total excess attenuation, its \emph{mass}, exactly, while its depth extent, which volume needs, is about 15 times worse conditioned for a $\pm15^\circ$ sweep. A system for DTS should therefore report mass first, fill depth with a learned prior that stays consistent with the X-rays, and state how uncertain each number is. Mass growth is already an established CT biomarker that detects growth earlier than volume~\cite{dehoop2010}.
+\subsection{Why Existing Reconstruction and AI Are Not Enough}
+ Iterative reconstruction from a \ang{30} sweep smears each nodule 3--5 times longer in depth than in-plane (we measured a median ratio of 3.5 on LIDC nodules). Generative models can fill the missing wedge, but a model that invents anatomy is dangerous for cancer follow-up~\cite{bhadra2021,zhang2025pail}. Published sparse-view methods report image quality (PSNR, SSIM) rather than calibrated clinical numbers, and none is built for DTS geometry.
+
+\subsection{Computational Motivation}
+ We asked what DTS can \emph{measure}, not only what it can show. A derivation from projection moments (\cref{sec:method}) shows that every DTS view measures a nodule's total excess attenuation, its \emph{mass}, exactly, while its depth extent, which volume needs, is about 15 times worse conditioned for a $\pm15^\circ$ sweep. A system for DTS should therefore report mass first, fill depth with a learned prior that stays consistent with the X-rays, and state how uncertain each number is. Mass growth is already an established CT biomarker that detects growth earlier than volume~\cite{dehoop2010}.
 
 \section{Objectives}
 
@@ -60,11 +67,16 @@ MedLift-3D is evaluated as a virtual clinical trial on real patient CT, because 
 
 \section{Project Outcome}
 
-\paragraph{Technical.} A verified, open pipeline of 18 scripted steps, each ending in automatic PASS/FAIL checks, from data download to final tables, figures and an HTML report. The full study runs on one rented GPU in about 14 hours for about US\$16.
+The project produces outcomes at three levels: a working and verified technical system, a tool that a clinician can use, and research contributions that can be published.
 
-\paragraph{Clinical.} A click-to-3D application that returns mass, volume, an EUPS size category with calibrated probabilities and a virtual follow-up, always with intervals instead of single numbers.
+\subsection{Technical Outcome}
+ A verified, open pipeline of 18 scripted steps, each ending in automatic PASS/FAIL checks, from data download to final tables, figures and an HTML report. It contains a differentiable DTS simulator and projector, whole-chest and prism reconstruction, a trained conditional diffusion prior and nodule detector, Gaussian measurement, conformal calibration and an explainability module, covered by 69 unit tests and documented for rented cloud GPUs and free Kaggle notebooks. The full study runs on one rented GPU in about 14 hours for about US\$16.
 
-\paragraph{Research.} (i) A projection-moment argument that DTS measures mass but not depth extent; (ii) a data-consistent diffusion prior inside a DTS prism combined with Gaussian mass; (iii) calibrated, decision-level uncertainty for DTS volumetry; (iv) a truth-referenced seen/unseen test of what the prior adds. \Cref{sec:gap} states exactly what is and is not new.
+\subsection{Clinical Outcome}
+ A click-to-3D application that returns, in under a minute, the nodule's mass, volume, long-axis diameter and EUPS size category with calibrated probabilities, together with a virtual follow-up for growth. Every number comes with an interval instead of a single value, and a low-confidence flag tells the clinician when the DTS evidence is too weak and a CT is advisable. The tool is meant for following known nodules, the step that today requires repeated CT.
+
+\subsection{Research Contribution}
+ (i) A projection-moment argument that DTS measures mass but not depth extent; (ii) a data-consistent diffusion prior inside a DTS prism combined with Gaussian mass; (iii) calibrated, decision-level uncertainty for DTS volumetry; (iv) a truth-referenced seen/unseen test of what the prior adds. \Cref{sec:gap} states exactly what is and is not new.
 
 \section{Organization of the Report}
 

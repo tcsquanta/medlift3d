@@ -1,0 +1,23 @@
+% Dataset selection and split
+\begin{tikzpicture}[font=\footnotesize, >=Stealth,
+    box/.style={draw=edge, fill=white, rounded corners=3pt, align=center, text width=4.4cm, minimum height=1.0cm},
+    excl/.style={draw=edge, fill=physics, align=left, text width=4.6cm, font=\scriptsize, inner sep=4pt},
+    split/.style={draw=accent, fill=accentlight, rounded corners=3pt, align=center, text width=3.0cm, minimum height=1.5cm, anchor=north}]
+  \node[box] (all) at (0,0) {\textbf{LIDC-IDRI (TCIA)}\\ 1{,}018 thoracic CT scans\\ 4 radiologists per scan};
+  \node[box] (sel) at (0,-2.3) {\textbf{Selected}\\ 583 patients, 1{,}144 nodules};
+  \node[excl] (ex) at (5.6,-1.15) {\textbf{Excluded}\\ $\bullet$ slice thickness $>2.5$ mm\\ $\bullet$ no nodule of 4--30 mm\\ \phantom{$\bullet$} marked by $\geq 3$ readers\\ $\bullet$ download or conversion failure};
+  \draw[->, thick, edge] (all) -- (sel);
+  \draw[->, thick, edge] (0,-1.15) -- (ex.west);
+  \node[box, text width=6.2cm] (prep) at (0,-4.4) {\textbf{Cases}\\ HU volume, consensus mask ($\geq$50\%),\\ 4 reader masks, CT table removed};
+  \draw[->, thick, edge] (sel) -- (prep);
+  \node[split] (tr) at (-3.6,-6.2) {\textbf{Train}\\ 350 patients\\ (60\%)};
+  \node[split] (ca) at (0,-6.2) {\textbf{Calibration}\\ 117 patients\\ (20\%)};
+  \node[split] (te) at (3.6,-6.2) {\textbf{Test}\\ 116 patients (20\%)\\ 225 nodules};
+  \draw[->, thick, edge] (prep.south) -- ++(0,-0.35) -| (tr.north);
+  \draw[->, thick, edge] (prep.south) -- (ca.north);
+  \draw[->, thick, edge] (prep.south) -- ++(0,-0.35) -| (te.north);
+  \node[font=\scriptsize, text=quiet, align=center, below=2pt of tr] {diffusion prior and detector\\ training (10\% held out)};
+  \node[font=\scriptsize, text=quiet, align=center, below=2pt of ca] {detector selection,\\ conformal calibration};
+  \node[font=\scriptsize, text=quiet, align=center, below=2pt of te] {final evaluation only};
+  \node[font=\scriptsize, text=quiet, anchor=west] at (0.15,-5.25) {split by patient};
+\end{tikzpicture}
