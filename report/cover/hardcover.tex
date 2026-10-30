@@ -36,6 +36,10 @@
 \newcommand{\at}[1]{($(current page.north)+(0,-#1)$)}
 \noindent\begin{tikzpicture}[remember picture,overlay,every node/.style={text=ink,align=center,anchor=north,inner sep=0pt}]
   \fill[board] (current page.south west) rectangle (current page.north east);
+  % double border: 20 mm in from the edge (clear of the board turn-in); both lines
+  % are thick enough for foil (0.56 mm and 0.30 mm)
+  \draw[ink,line width=1.6pt] ($(current page.south west)+(20mm,20mm)$) rectangle ($(current page.north east)-(20mm,20mm)$);
+  \draw[ink,line width=0.85pt] ($(current page.south west)+(23mm,23mm)$) rectangle ($(current page.north east)-(23mm,23mm)$);
 
   \node[font=\fontsize{25}{36}\selectfont\bfseries] at \at{36mm}
     {Beyond the Missing Wedge:\\
