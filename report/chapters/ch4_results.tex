@@ -261,7 +261,7 @@ Mondrian + normalised & 88\% & $4.9\times10^{6}\%$ & 79\% & 97\% & $3.2\times10^
 \begin{table}[!htbp]
 \centering\small
 \caption{EUPS category probabilities on the test nodules (step 16). Lower Brier score and ECE are better.}
-\label{tab:risk}
+\label{tab:catprob}
 \begin{adjustbox}{max width=\linewidth}
 \begin{tabular}{l ccccc}
 \toprule
@@ -277,7 +277,7 @@ Point estimate only (0/1) & 0.635 & 0.635 & 0.324 & 0.324 & 27\% \\
 \end{adjustbox}
 \end{table}
 
-\textbf{H5 is partly supported.} Calibration clearly helped the probability that a nodule is at least 100~mm$^3$: the Brier score fell from 0.543 (raw vote) to 0.174 and the ECE from 0.583 to 0.115 (\cref{tab:risk,fig:reliability}), and the most likely category was right for 38\% of nodules instead of 26\%. For the 300~mm$^3$ threshold calibration made almost no difference (0.284 vs 0.291). The category sets from the 90\% intervals contained the true category for 99\% of nodules but held 2.91 of the 3 categories on average, again valid but uninformative. Mondrian calibration raised the worst size-group coverage for mass from 89\% to 96\% but not for volume (82\% to 79\%; \cref{fig:groups}), so size-conditional coverage was achieved for mass only.
+\textbf{H5 is partly supported.} Calibration clearly helped the probability that a nodule is at least 100~mm$^3$: the Brier score fell from 0.543 (raw vote) to 0.174 and the ECE from 0.583 to 0.115 (\cref{tab:catprob,fig:reliability}), and the most likely category was right for 38\% of nodules instead of 26\%. For the 300~mm$^3$ threshold calibration made almost no difference (0.284 vs 0.291). The category sets from the 90\% intervals contained the true category for 99\% of nodules but held 2.91 of the 3 categories on average, again valid but uninformative. Mondrian calibration raised the worst size-group coverage for mass from 89\% to 96\% but not for volume (82\% to 79\%; \cref{fig:groups}), so size-conditional coverage was achieved for mass only.
 
 \resultfig[0.7\linewidth]{volume_coverage_levels.png}{Observed coverage at every nominal level for the volume intervals (test nodules): conformal intervals lie on or above the diagonal, the raw ensemble spread far below it.}{fig:coverage}
 \resultfig{reliability.png}{Reliability diagrams of the EUPS category probabilities for $P(V\geq100)$ and $P(V\geq300)$ (test nodules).}{fig:reliability}
