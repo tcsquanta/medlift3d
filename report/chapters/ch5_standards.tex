@@ -9,7 +9,7 @@ MedLift-3D is research software to be developed as medical-device software, so w
 
 \subsection{Software Standards}
 
-The software standards are related to data formats, the software life cycle, risk and quality management, code quality and numerical precision and licensing (\cref{tab:swstd}). The input path reads DICOM directly, and checks its geometry, while intermediate data are stored as compressed NumPy files with a JSON header, which store the volume, masks and metadata of each case in one self-describing file, the format in which these are stored and exchanged in hospitals. We have not been certified to IEC 62304, but we did follow the core practices: each requirement was mapped to a test, all code is version controlled, 69 unit tests are run automatically and any anomaly discovered during software development has been documented (\cref{ch:results}) by implementation of the life cycle processes defined in IEC 62304. The hazard analysis in \cref{tab:risk} is used for the application of ISO 14971 risk management and ISO 13485 quality management is identified as required for a future product. This is intentional: physics, measurement is done in 32-bit precision; only diffusion network is done in bf16 to keep the 32-bit range, avoiding overflow of fp16 in 3D networks. Lastly, all data and libraries have open licence with attribution.
+The software standards are related to data formats, the software life cycle, risk and quality management, code quality and numerical precision and licensing (\cref{tab:swstd}). The input path reads DICOM (the format in which hospitals store and exchange images) directly, and checks its geometry, while intermediate data are stored as compressed NumPy files with a JSON header, which store the volume, masks and metadata of each case in one self-describing file. We have not been certified to IEC 62304, but we did follow the core practices: each requirement was mapped to a test, all code is version controlled, 69 unit tests are run automatically and any anomaly discovered during software development has been documented (\cref{ch:results}) by implementation of the life cycle processes defined in IEC 62304. The hazard analysis in \cref{tab:risk} is used for the application of ISO 14971 risk management and ISO 13485 quality management is identified as required for a future product. This is intentional: physics, measurement is done in 32-bit precision; only diffusion network is done in bf16 to keep the 32-bit range, avoiding overflow of fp16 in 3D networks. Lastly, all data and libraries have open licence with attribution.
 
 \begin{table}[!htbp]
 \centering\small
@@ -94,7 +94,7 @@ There was no outside funding for the project, so all calculations had to be with
   \item \textbf{Honest claims:} all results are obtained from \emph{simulated} DTS, not actual scanners, and \cref{sec:gap} provides a list of the things we don't claim.\item \textbf{Honest results:} hypotheses were given prior to results; and the results in the report were whatever we stumbled upon such as: H1 and H2 were not supported; intervals were so wide as to be useless; detector sensitivity is only 35\% at 2 false positives per scan; failed checks in \cref{ch:results}.\item \textbf{Credit:} all datasets, libraries and ideas we build on are cited, including the data citations mandated by TCIA.\item \textbf{Fairness:} LIDC-IDRI is primarily derived from patients in the United States, and performance has not been determined on other patient populations such as patients with healed tuberculosis scars and is not claimed for such populations.\item \textbf{Data ethics:} Public data used under its licence, no re-identification attempt, Only de-identified data.
 \end{itemize}
 
-\paragraph{Professional responsibility.} The team takes responsibility for their choices, and their errors. That we lost a third of the attenuation on the prism in the real data pilot, we found out and corrected ourselves on the lack of depth support in our design on the project before the full run, else we'd have been claiming training losses as successes. The owner of each step (\cref{tab:tasks}) is responsible for the checks for that step. The system is decision support -- diagnosis remains the responsibility of the radiologist.
+\paragraph{Professional responsibility.} The team takes responsibility for their choices, and their errors. That we lost a third of the attenuation on the prism in the real data pilot, we found out and corrected ourselves on the lack of depth support in our design on the project before the full run; we also narrowed the first design rather than claim training losses as successes. The owner of each step (\cref{tab:tasks}) is responsible for the checks for that step. The system is decision support -- diagnosis remains the responsibility of the radiologist.
 
 \subsection{Health and Safety Constraint}
 
@@ -122,7 +122,7 @@ Over-trust & Automation bias & Clinician stops checking & Intervals and flags sh
 
 \subsection{Social Constraint}
 
-Short term, DTS-based follow-up would help to decrease CT waiting lists and patient travel outside of larger cities. It could enable nodule surveillance and ultimately screening in the longer term wherever CT resource availability is the limiting factor and the most survival benefit is achieved through early diagnosis. This translates to less dose, less cost for the patient, a measurement tool with honest uncertainty for the radiologist and local validation and training, and less cost for the health system for follow-up. Two potential adverse effects are the overusing of the tool, where many more people are followed, and the potential for a divide to develop between those who use the tool in public hospitals and those who don't, which is making their own guidelines; both suggest a need for public-sector implementation and adherence to guidelines.
+Short term, DTS-based follow-up would help to decrease CT waiting lists and patient travel outside of larger cities. It could enable nodule surveillance and ultimately screening in the longer term wherever CT resource availability is the limiting factor and the most survival benefit is achieved through early diagnosis. This translates to less dose, less cost for the patient, a measurement tool with honest uncertainty for the radiologist and local validation and training, and less cost for the health system for follow-up. Two potential adverse effects are the overusing of the tool, where many more people are followed, and the potential for a divide to develop between those who use the tool in private hospitals and those who don't, which is making their own guidelines; both suggest a need for public-sector implementation and adherence to guidelines.
 
 \subsection{Political Constraint}
 
@@ -248,7 +248,7 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 
 \paragraph{P6 -- Extent of stakeholder involvement (partial).} Clinical needs were based on guidelines and feedback from supervisor; future work will include direct evaluation by the radiologists.
 
-\paragraph{P7 -- Interdependence.} There is a lot of interdependence between simulation, reconstruction, prior, Gaussians, calibration, and detector: for instance, until now the depth-support bug in reconstruction screwed up the training data, and consequently all subsequent measurements, including calibration and detector.
+\paragraph{P7 -- Interdependence.} There is a lot of interdependence between simulation, reconstruction, prior, Gaussians, calibration, and detector: for instance, the depth-support bug in reconstruction screwed up the training data, and consequently all subsequent measurements, including calibration and detector, until it was fixed.
 
 \subsection{Engineering Activities}
 
@@ -267,7 +267,7 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 \end{adjustbox}
 \end{table}
 
-\paragraph{A1 -- Range of resources.} There was a public collection of 583 patients ($\approx$64 Gb), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries.
+\paragraph{A1 -- Range of resources.} There was a public collection of 583 patients ($\approx$64 GB), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries.
 
 \paragraph{A2 -- Level of interaction.} Three persons in the team (with different roles), the supervisor, and the course teacher, published clinical guidelines, and open-source communities (crepes, Gradio, pylidc) interact.
 
