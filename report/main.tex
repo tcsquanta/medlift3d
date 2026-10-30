@@ -1,11 +1,11 @@
 % MedLift-3D -- final report (UIU CSE template layout)
 % Build:  latexmk -pdf main.tex      (or upload the whole folder to Overleaf)
-\documentclass[12pt,a4paper,oneside]{report}
+\documentclass[11pt,a4paper,oneside]{report}
 
 % ---------------------------------------------------------------- packages
 \usepackage[utf8]{inputenc}
 % Computer Modern (CMR/CMBX/CMCSC), as in the UIU FYDP template
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=3cm]{geometry}
 \usepackage{setspace}
 \usepackage{amsmath,amssymb,bm}
 \usepackage{graphicx}
@@ -34,7 +34,6 @@
 
 \onehalfspacing
 \emergencystretch=3em
-\setlength{\parskip}{4pt}
 \captionsetup{font=small,labelfont=bf}
 \setlist{itemsep=2pt,topsep=4pt}
 \sisetup{group-separator={,},group-minimum-digits=4}
@@ -67,19 +66,15 @@
 \setlength{\headheight}{14pt}
 \pagestyle{fancy}
 \fancyhf{}
-\renewcommand{\chaptermark}[1]{\markboth{Chapter \thechapter. #1}{}}
-\renewcommand{\sectionmark}[1]{\markright{\thesection. #1}}
-\fancyhead[L]{\small\rightmark}
-\fancyhead[R]{\small\leftmark}
+\rhead{\nouppercase\leftmark}
+\lhead{\nouppercase\rightmark}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
 
-% Front-matter heading between two rules (template style: Abstract, Acknowledgements)
-\newcommand{\frontchapter}[1]{\clearpage\thispagestyle{plain}\markboth{#1}{#1}%
-  \noindent\rule{\linewidth}{0.6pt}\par\vspace{10pt}%
-  {\centering\LARGE\bfseries #1\par}\vspace{6pt}%
-  \noindent\rule{\linewidth}{0.6pt}\par\vspace{12pt}}
+% Front-matter heading (template 0.1.abstract.tex / 0.2.ack.tex): huge bold title over a line
+\newcommand{\frontchapter}[1]{\clearpage\markboth{}{}%
+  \begin{center}{\huge\bfseries #1}\par\noindent\rule{\linewidth}{0.4pt}\end{center}}
 \renewcommand{\contentsname}{Table of Contents}
 % running heads in title case, as in the template (report.cls upper-cases them)
 \usepackage{etoolbox}
@@ -96,24 +91,45 @@
 
 % ---------------------------------------------------------------- title page
 \begin{titlepage}
-\centering
-\rule{\linewidth}{0.6pt}\par
-\vspace{0.45cm}
-{\LARGE\bfseries Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis\par}
-\vspace{0.35cm}
-\rule{\linewidth}{0.6pt}\par
-\vspace{1.6cm}
-By\par
-\vspace{1.2cm}
-{\bfseries Jubair Ahmed (011222136)\\[4pt] Foyez Ahammed Naeem (011222011)\\[4pt] Md Motasim Billah (011222016)\par}
-\vspace{1.5cm}
-Submitted in partial fulfilment of the requirements\\ of the degree of Bachelor of Science in Computer Science and Engineering\par
-\vspace{1.5cm}
-October 30, 2026\par
-\vspace{1.5cm}
-\includegraphics[width=2.2cm]{figures/uiu_logo.png}\par
-\vspace{0.4cm}
-{\scshape Department of Computer Science and Engineering\\ United International University\par}
+% layout follows the template's 0.0.title.tex
+\begin{center}
+\rule{\linewidth}{0.4pt}\\
+{\huge\bfseries Beyond the Missing Wedge:\\ Calibrated 3D Lung Nodule Mass and\\ Growth Assessment from Low-Dose\\ Chest Tomosynthesis\par}
+\rule{\linewidth}{0.4pt}
+\end{center}
+
+\vfill
+
+\begin{center}
+By
+\end{center}
+
+\vfill
+\begin{center}
+{\large\bfseries Jubair Ahmed (011222136)\\[2pt] Foyez Ahammed Naeem (011222011)\\[2pt] Md Motasim Billah (011222016)}
+\end{center}
+
+\vfill
+
+\begin{center}
+{Submitted in partial fulfilment of the requirements \\of the degree of Bachelor of Science in Computer Science and Engineering}
+\end{center}
+
+\vfill
+\begin{center}
+October 30, 2026
+\end{center}
+
+\vfill
+
+\begin{center}
+\includegraphics[scale=0.15]{figures/uiu_logo.png}
+\end{center}
+
+\begin{center}
+\textsc{Department of Computer Science and Engineering\\
+United International University}
+\end{center}
 \end{titlepage}
 
 \pagenumbering{roman}

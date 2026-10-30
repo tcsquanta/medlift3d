@@ -48,7 +48,7 @@ Automatic detection vs false positives & The detector only suggests; the clinici
 Functional requirements state what the system must do, from loading the data to producing the report; nonfunctional requirements state the qualities it must have: speed, cost, reproducibility, validity, safety, usability, portability and privacy. Each requirement has a measurable acceptance criterion and the pipeline step that checks it (\cref{tab:fr,tab:nfr}). The criteria were chosen so that a step script can check them automatically, which makes the verification in \cref{ch:results} independent of anyone's judgement; \cref{tab:verify} reports the result for every row.
 
 {\small
-\begin{longtable}{>{\raggedright\arraybackslash}p{1.1cm} >{\raggedright\arraybackslash}p{6.2cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}p{1.6cm}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{1.1cm} >{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}p{1.6cm}}
 \caption{Functional requirements.}\label{tab:fr}\\
 \toprule
 ID & Requirement & Acceptance criterion & Checked by \\
@@ -121,7 +121,7 @@ The level-1 DFD (\cref{fig:dfd1}) breaks down the system into eight processes an
 
 \subsection{UI Design}
 
-The interface is a web-based application that is based on a single action, which is to click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice, with detector suggestions, annotated nodules (for evaluation) and with the click; (3) the depth slider, which provides the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up with VDT and MDT.
+The interface is a web-based application built on a single action, which is to click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice, with detector suggestions, annotated nodules (for evaluation) and with the click; (3) the depth slider, which provides the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up with VDT and MDT.
 
 \begin{figure}[htbp]
   \centering

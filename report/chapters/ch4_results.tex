@@ -113,7 +113,7 @@ This section outlines the testing of the system, data division, metrics/baseline
 \subsection{Verification Strategy}
  There were four levels of testing:
 \begin{enumerate}
-  \item \textbf{Unit tests (69):} projector adjointness, mass conservation, conformal coverage (synthetic data), Mondrian group coverage, CPS probabilities (against crepes), CGLS seen/unseen split, and fit-check parsing.\item \textbf{Smoke test:} entire pipeline smoke test on synthetic chest phantoms on CPU in 10-20 minutes.\item \textbf{Real-data pilots:} CPU (4 patients) and Kaggle (40 patients) which uncovered and patched the depth-support bug (prism attenuation 67--81\% $\rightarrow$ 98.7\%).\item \textbf{Full run:} 583 patients with automatic checks at each step and HTML report which contains all checks.
+  \item \textbf{Unit tests (69):} projector adjointness, mass conservation, conformal coverage (synthetic data), Mondrian group coverage, CPS probabilities (against crepes), CGLS seen/unseen split, and fit-check parsing.\item \textbf{Smoke test:} entire pipeline on synthetic chest phantoms on CPU in 10-20 minutes.\item \textbf{Real-data pilots:} CPU (4 patients) and Kaggle (40 patients) which uncovered and patched the depth-support bug (prism attenuation 67--81\% $\rightarrow$ 98.7\%).\item \textbf{Full run:} 583 patients with automatic checks at each step and HTML report which contains all checks.
 \end{enumerate}
 
 \subsection{Data Split and Evaluation Protocol}
@@ -128,7 +128,7 @@ Each requirement in \cref{tab:fr,tab:nfr} was checked by the step named in its l
 
 
 {\small
-\begin{longtable}{>{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}p{1.3cm}}
+\begin{longtable}{>{\raggedright\arraybackslash}p{1.4cm} >{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}p{6.2cm} >{\raggedright\arraybackslash}p{1.3cm}}
 \caption{Requirement verification (traceability).}\label{tab:verify}\\
 \toprule
 Req. & Criterion & Result & Met \\
@@ -400,4 +400,4 @@ The application also shows the prism around the click in the coronal plane (what
 
 \section{Summary}
 
-All requirements that had a fixed criterion were automatically checked. As expected, the pipeline, the simulation, the reconstruction, the detector and the uncertainty machinery behaved as designed: the learned detector outperformed the training-free baseline by 17x in CPM, the diffusion prior outperformed the held-out pairs with respect to nodule-region PSNR by 3.35 dB, conformal intervals achieved their target coverage, and the seen/unseen analysis demonstrated that the nodule's mass is completely captured by the X-rays and that the prior's "unseen" component correlates with the truth. None of the measurements in themselves achieved the objective -- H1 and H2 were not achieved and the intervals, though valid, were too large to be of use -- and our method did not achieve H4. These failures were attributed to the previous shrink of faint nodules, mass measurements in image space not from the projections, and failures in the measurement of nodules within the calibration set. These are not open-ended fixes but are concrete testable fixes.
+All requirements that had a fixed criterion were automatically checked. As expected, the pipeline, the simulation, the reconstruction, the detector and the uncertainty machinery behaved as designed: the learned detector outperformed the training-free baseline by 17x in CPM, the diffusion prior outperformed the held-out pairs with respect to nodule-region PSNR by 3.35 dB, conformal intervals achieved their target coverage, and the seen/unseen analysis demonstrated that the nodule's mass is completely captured by the X-rays and that the prior's "unseen" component correlates with the truth. None of the measurements in themselves achieved the objective -- H1 and H2 were not achieved and the intervals, though valid, were too large to be of use -- and our method did not achieve H4. These failures were attributed to the previous shrink of faint nodules, mass measurements in image space not from the projections, and failures in the measurement of nodules within the calibration set. These are not open-ended but concrete, testable fixes.
