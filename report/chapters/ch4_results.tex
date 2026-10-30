@@ -236,7 +236,7 @@ Two observations explain these numbers. First, image quality and measurement acc
 
 \subsection{Calibrated Uncertainty (H3, H5)}
 
-\Cref{tab:uq} gives the conformal intervals of the full method. All variants calibrated on the 76 calibration nodules reach or exceed the 90\% target coverage on the test nodules except the Mondrian variant for volume, so the coverage guarantee of conformal prediction held in practice (\cref{fig:coverage}). The raw ensemble spread, used as $\pm z$ standard deviations, covered only 28\% at the 90\% level. \textbf{However, the intervals are not informative.} Their median width is many orders of magnitude larger than the estimate, and the normalised variants are effectively unbounded. The reason is the failures: a measurement of zero gives an infinite log-error, so with 22--26\% failures among the calibration nodules the conformal quantile lands on infinite scores. The Mondrian variant is the only one with finite widths, at about 58 times the estimate. H3 is therefore supported for validity (coverage) but not for usefulness (width), and its sub-claim that mass intervals are narrower than volume intervals cannot be assessed with unbounded widths.
+\Cref{tab:uq} gives the conformal intervals of the full method. All variants calibrated on the 76 calibration nodules reach or exceed the 90\% target coverage on the test nodules except the Mondrian variant for volume, so the coverage guarantee of conformal prediction held in practice (\cref{fig:coverage}). The raw ensemble spread, used as $\pm z$ standard deviations, covered only 28\% at the 90\% level. \textbf{However, the intervals are not informative.} Their median width is many orders of magnitude larger than the estimate, and the normalised variants are effectively unbounded. The reason is the failures: a measurement of zero gives an infinite log-error, so with 22--26\% failures among the calibration nodules the conformal quantile lands on infinite scores. The Mondrian variant is the only one with finite widths, at about 58 times the estimate. H3 is therefore supported for validity (coverage) but not for usefulness (width), and its sub-claim that mass intervals are narrower than volume intervals cannot be assessed with unbounded widths. \Cref{fig:intervals} shows both findings for every test nodule: the truth falls inside 70 of the 74 intervals, but 61 upper bounds lie above $10^5$~mm$^3$, and the 16 failed reads (estimate zero) sit at the bottom of their intervals.
 
 \begin{table}[!htbp]
 \centering\small
@@ -258,6 +258,8 @@ Mondrian + normalised & 88\% & $4.9\times10^{6}\%$ & 79\% & 97\% & $3.2\times10^
 \end{adjustbox}
 \end{table}
 
+\resultfig[\linewidth]{interval_overview.png}{Conformal 90\% volume intervals (normalised by the ensemble spread) for the 74 test nodules, sorted by the radiologists' consensus volume. Green: truth inside the interval; red: outside; cross: failed read with estimate zero; arrow: upper bound beyond the plotted range.}{fig:intervals}
+
 \begin{table}[!htbp]
 \centering\small
 \caption{EUPS category probabilities on the test nodules (step 16). Lower Brier score and ECE are better.}
@@ -277,10 +279,11 @@ Point estimate only (0/1) & 0.635 & 0.635 & 0.324 & 0.324 & 27\% \\
 \end{adjustbox}
 \end{table}
 
-\textbf{H5 is partly supported.} Calibration clearly helped the probability that a nodule is at least 100~mm$^3$: the Brier score fell from 0.543 (raw vote) to 0.174 and the ECE from 0.583 to 0.115 (\cref{tab:catprob,fig:reliability}), and the most likely category was right for 38\% of nodules instead of 26\%. For the 300~mm$^3$ threshold calibration made almost no difference (0.284 vs 0.291). The category sets from the 90\% intervals contained the true category for 99\% of nodules but held 2.91 of the 3 categories on average, again valid but uninformative. Mondrian calibration raised the worst size-group coverage for mass from 89\% to 96\% but not for volume (82\% to 79\%; \cref{fig:groups}), so size-conditional coverage was achieved for mass only.
+The category probabilities are read off each nodule's calibrated predictive distribution, the probability that its volume is at most $v$ for every $v$ (\cref{fig:cpd}): $P(V\geq100)$ is one minus its value at 100~mm$^3$. \textbf{H5 is partly supported.} Calibration clearly helped the probability that a nodule is at least 100~mm$^3$: the Brier score fell from 0.543 (raw vote) to 0.174 and the ECE from 0.583 to 0.115 (\cref{tab:catprob,fig:reliability}), and the most likely category was right for 38\% of nodules instead of 26\%. For the 300~mm$^3$ threshold calibration made almost no difference (0.284 vs 0.291). The category sets from the 90\% intervals contained the true category for 99\% of nodules but held 2.91 of the 3 categories on average, again valid but uninformative. Mondrian calibration raised the worst size-group coverage for mass from 89\% to 96\% but not for volume (82\% to 79\%; \cref{fig:groups}), so size-conditional coverage was achieved for mass only.
 
 \resultfig[0.7\linewidth]{volume_coverage_levels.png}{Observed coverage at every nominal level for the volume intervals (test nodules): conformal intervals lie on or above the diagonal, the raw ensemble spread far below it.}{fig:coverage}
 \resultfig{reliability.png}{Reliability diagrams of the EUPS category probabilities for $P(V\geq100)$ and $P(V\geq300)$ (test nodules).}{fig:reliability}
+\resultfig[\linewidth]{volume_cpd_examples.png}{Calibrated conformal predictive distributions of four test nodules: the probability that the volume is at most $v$ (blue), the estimate (dotted), the truth (green) and the EUPS thresholds of 100 and 300~mm$^3$ (red). A steep curve near the truth is a confident, correct prediction; a shallow one spreads the probability over all categories.}{fig:cpd}
 \resultfig[0.75\linewidth]{group_coverage.png}{Coverage of the volume intervals in three size groups, with and without Mondrian calibration.}{fig:groups}
 
 \subsection{Growth (H4)}
@@ -330,7 +333,7 @@ Diffusion + Gaussians (ours) & 0.04 [0.02, 0.07] & 0.00 [0.00, 0.00] & 0.09 [0.0
 \end{adjustbox}
 \end{table}
 
-The split itself is accurate (median $|A\mathbf{x}_{\text{unseen}}|/|A\mathbf{x}| = 0.002$). \textbf{The analysis confirms the physics behind H1}: only 0.3\% of the true nodule's mass lies in the unseen part, while 15\% of the nodule-box signal (its shape in depth) is invisible to the 15 views. \textbf{H6 is supported for the diffusion prior}: its unseen content has a positive skill of 0.22 [0.14, 0.36] against the true CT, so it recovers part of what the views miss rather than inventing structure, and it reproduces the seen part far better than the physics-only reconstruction (0.88 vs 0.39). After Gaussian fitting the skill drops to 0.09, so the Gaussian step discards much of what the prior recovered. Nodules that are less visible to DTS had larger volume errors (Spearman $-0.47$ [$-0.75$, $-0.12$], $n=30$). \Cref{fig:seenex} shows one nodule.
+The split itself is accurate (median $|A\mathbf{x}_{\text{unseen}}|/|A\mathbf{x}| = 0.002$). \textbf{The analysis confirms the physics behind H1}: only 0.3\% of the true nodule's mass lies in the unseen part, while 15\% of the nodule-box signal (its shape in depth) is invisible to the 15 views. \textbf{H6 is supported for the diffusion prior}: its unseen content has a positive skill of 0.22 [0.14, 0.36] against the true CT, so it recovers part of what the views miss rather than inventing structure, and it reproduces the seen part far better than the physics-only reconstruction (0.88 vs 0.39). After Gaussian fitting the skill drops to 0.09, so the Gaussian step discards much of what the prior recovered. Nodules that are less visible to DTS had larger volume errors (Spearman $-0.47$ [$-0.75$, $-0.12$], $n=30$). \Cref{fig:seenex} shows one nodule. \Cref{fig:seenex2} shows an 11.6~mm nodule of the same patient where the prior works as intended and the Gaussian step then fails: the diffusion samples recover the hidden depth (unseen skill 0.36, seen skill 0.93), but the Gaussian fit returns no nodule at all (volume zero against 615~mm$^3$), the failure mode traced in the section on why the measurements failed.
 
 \begin{table}[!htbp]
 \centering\small
@@ -358,6 +361,7 @@ Physics data misfit & $-0.08$ [$-0.24$, $+0.08$] & $-0.04$ [$-0.19$, $+0.12$] \\
 For the detector, the share of input$\times$gradient saliency within 10~mm of the suggestion was 0.15 for true positives and 0.16 for false positives (\cref{fig:saliency}): the detector looks at the local region in both cases, and false positives come from local structures that resemble nodules, such as vessels seen end-on, not from attention elsewhere.
 
 \resultfig{seen_unseen_example.png}{Seen/unseen split for one test nodule (LIDC-IDRI-0018): CT truth, ROI-SIRT, diffusion and diffusion with Gaussians, with the excess-attenuation profile through the nodule centre in depth (bottom).}{fig:seenex}
+\resultfig{seen_unseen_example2.png}{Seen/unseen split for a second test nodule (LIDC-IDRI-0018, 11.6~mm): the diffusion prior recovers depth that the views miss, while the Gaussian fit loses the nodule.}{fig:seenex2}
 \resultfig{saliency_examples.png}{Input$\times$gradient saliency of the detector for true and false positive suggestions (coronal and depth views).}{fig:saliency}
 
 \subsection{Why the Measurements Failed}
