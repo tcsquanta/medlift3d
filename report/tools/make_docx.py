@@ -288,7 +288,7 @@ def main():
     labels, cites = read_aux()
     title = r"""
 \begin{center}
-\textbf{MedLift-3D: Click-to-3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis with Calibrated Uncertainty}
+\textbf{MedLift-3D: Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis}
 
 By
 

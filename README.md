@@ -1,6 +1,6 @@
 # MedLift-3D
 
-**Click-to-3D lung nodule mass and growth assessment from low-dose chest digital tomosynthesis (DTS), with calibrated uncertainty.**
+**Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis.**
 
 Final Year Design Project, Dept. of CSE, United International University -
 Jubair Ahmed, Foyez Ahammed Naeem, Md Motasim Billah.
