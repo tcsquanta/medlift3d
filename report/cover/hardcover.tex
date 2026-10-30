@@ -1,88 +1,80 @@
-% MedLift-3D -- thesis hard cover (front cover + spine)
-% Build:  latexmk -pdf hardcover.tex
-% Page 1: front cover, A4 (210 x 297 mm).
+% MedLift-3D -- thesis hard cover, single-colour (gold) print
+% Build:  latexmk -pdf hardcover.tex                 -> preview: gold on a dark cover
+%         latexmk -pdf hardcover_foil.tex            -> print artwork: one solid ink on white
+% Page 1: front cover, A4 (210 x 297 mm), same structure as the report's title page.
 % Page 2: spine strip, \spinewidth x 297 mm. Ask the binder for the exact spine
 %         width for your page count and paper, then change \spinewidth below.
+% Everything is one ink: no tints, no gradients, no hairlines (foil and gold ink
+% cannot hold them). Palatino is used for its sturdier strokes.
 \documentclass{article}
-\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[sc]{mathpazo}
 \usepackage[paperwidth=210mm,paperheight=297mm,margin=0mm]{geometry}
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{calc}
 
-\definecolor{navy}{HTML}{0B1F3A}
-\definecolor{gold}{HTML}{C9A54C}
-\definecolor{goldlight}{HTML}{E2C77E}
-\definecolor{ivory}{HTML}{F4EFE3}
-
 \newcommand{\spinewidth}{15mm}
-\newcommand{\coverlogo}{uiu_logo_transparent.png}
-% Gold double frame inset from the page edge (stays clear of a 15 mm board turn-in)
-\newcommand{\goldframe}[2]{% #1 outer inset, #2 gap
-  \draw[gold,line width=1.2pt] ($(current page.south west)+(#1,#1)$) rectangle ($(current page.north east)-(#1,#1)$);
-  \draw[gold,line width=0.4pt] ($(current page.south west)+(#1+#2,#1+#2)$) rectangle ($(current page.north east)-(#1+#2,#1+#2)$);}
+\ifdefined\FOILART
+  \definecolor{ink}{gray}{0}        % solid black = where the gold goes
+  \definecolor{board}{gray}{1}
+  \newcommand{\coverlogo}{uiu_logo_black.png}
+\else
+  \definecolor{ink}{HTML}{C9A54C}   % gold
+  \definecolor{board}{HTML}{0B1F3A} % preview only: dark navy cover board
+  \newcommand{\coverlogo}{uiu_logo_gold.png}
+\fi
+\usepackage[letterspace=180]{microtype} % \textls: letter-spaced text
 
 \pagestyle{empty}
 \begin{document}
 
 % ------------------------------------------------------------------ front cover
-\begin{tikzpicture}[remember picture,overlay]
-  \fill[navy] (current page.south west) rectangle (current page.north east);
-  \goldframe{20mm}{2.5mm}
+% Positions are measured from the top edge of the board (A4); all text stays at
+% least 30 mm inside the edges, clear of the board turn-in.
+\newcommand{\at}[1]{($(current page.north)+(0,-#1)$)}
+\noindent\begin{tikzpicture}[remember picture,overlay,every node/.style={text=ink,align=center,anchor=north,inner sep=0pt}]
+  \fill[board] (current page.south west) rectangle (current page.north east);
 
-  % crest and institution
-  \node[anchor=north] (logo) at ($(current page.north)+(0,-34mm)$)
-    {\includegraphics[width=30mm]{\coverlogo}};
-  \node[anchor=north,text=gold,font=\large\bfseries] (uni) at ($(logo.south)+(0,-5mm)$)
-    {U\,N\,I\,T\,E\,D\quad I\,N\,T\,E\,R\,N\,A\,T\,I\,O\,N\,A\,L\quad U\,N\,I\,V\,E\,R\,S\,I\,T\,Y};
-  \node[anchor=north,text=ivory,font=\normalsize\scshape] (dept) at ($(uni.south)+(0,-2.5mm)$)
-    {Department of Computer Science and Engineering};
+  \node[font=\fontsize{25}{36}\selectfont\bfseries] at \at{40mm}
+    {Beyond the Missing Wedge:\\
+     Uncertainty-Quantified 3D Lung\\
+     Nodule Assessment from Low-Dose\\
+     Digital Chest Tomosynthesis};
 
-  % report type
-  \node[anchor=north,text=goldlight,font=\small\bfseries] (type) at ($(dept.south)+(0,-17mm)$)
-    {F\,I\,N\,A\,L\quad Y\,E\,A\,R\quad D\,E\,S\,I\,G\,N\quad P\,R\,O\,J\,E\,C\,T\quad R\,E\,P\,O\,R\,T};
+  \node[font=\large\itshape] at \at{112mm} {By};
 
-  % title between gold rules
-  \draw[gold,line width=0.8pt] ($(type.south)+(-62mm,-6mm)$) -- ($(type.south)+(62mm,-6mm)$);
-  \node[anchor=north,text=ivory,align=center,text width=140mm,font=\huge\bfseries] (title) at ($(type.south)+(0,-11mm)$)
-    {\baselineskip=30pt Beyond the Missing Wedge:\\ Uncertainty-Quantified 3D Lung\\ Nodule Assessment from Low-Dose\\ Digital Chest Tomosynthesis\par};
-  \draw[gold,line width=0.8pt] ($(title.south)+(-62mm,-5mm)$) -- ($(title.south)+(62mm,-5mm)$);
+  \node[font=\fontsize{14.5}{24}\selectfont] at \at{128mm}
+    {\textbf{Jubair Ahmed}\enspace(011222136)\\
+     \textbf{Foyez Ahammed Naeem}\enspace(011222011)\\
+     \textbf{Md Motasim Billah}\enspace(011222016)};
 
-  % authors
-  \node[anchor=north,text=goldlight,font=\small\bfseries] (by) at ($(title.south)+(0,-20mm)$)
-    {S\,U\,B\,M\,I\,T\,T\,E\,D\quad B\,Y};
-  \node[anchor=north,text=ivory,align=center,font=\large] (names) at ($(by.south)+(0,-3mm)$)
-    {\begin{tabular}{@{}l@{\qquad}r@{}}
-       Jubair Ahmed & 011222136\\[1.5mm]
-       Foyez Ahammed Naeem & 011222011\\[1.5mm]
-       Md Motasim Billah & 011222016
-     \end{tabular}};
+  \node[font=\large] at \at{170mm}
+    {Submitted in partial fulfilment of the requirements\\[1mm]
+     of the degree of Bachelor of Science in Computer Science and Engineering};
 
-  % supervisor
-  \node[anchor=north,text=goldlight,font=\small\bfseries] (sup) at ($(names.south)+(0,-11mm)$)
-    {S\,U\,P\,E\,R\,V\,I\,S\,E\,D\quad B\,Y};
-  \node[anchor=north,text=ivory,align=center,font=\large] (supn) at ($(sup.south)+(0,-3mm)$)
-    {Mir Moynuddin Ahmed Shibly\\[1mm]{\normalsize Assistant Professor, Department of CSE}};
+  \node[font=\large] at \at{193mm} {\textls[120]{2 November 2026}};
 
-  % date
-  \node[anchor=south,text=gold,font=\large\bfseries] at ($(current page.south)+(0,32mm)$)
-    {N\,O\,V\,E\,M\,B\,E\,R\quad 2\,0\,2\,6};
+  \node at \at{212mm} {\includegraphics[width=31mm]{\coverlogo}};
+
+  \node[font=\large\scshape] at \at{252mm}
+    {\textls[60]{Department of Computer Science and Engineering}\\[1.5mm]
+     \textls[60]{United International University}};
 \end{tikzpicture}
 
 % ------------------------------------------------------------------ spine
 \newpage
 \pdfpagewidth=\spinewidth \paperwidth=\spinewidth
 \begin{tikzpicture}[remember picture,overlay]
-  \fill[navy] (current page.south west) rectangle (current page.north east);
-  % top: crest, middle: short title, lower: surnames, bottom: year
-  \node at ($(current page.north)+(0,-22mm)$) {\includegraphics[width=0.72\dimexpr\spinewidth\relax]{\coverlogo}};
-  \node[rotate=-90,text=ivory,font=\small\bfseries] at ($(current page.center)+(0,22mm)$)
-    {Beyond the Missing Wedge: 3D Lung Nodule Assessment from Low-Dose DTS};
-  \node[rotate=-90,text=goldlight,font=\scriptsize] at ($(current page.south)+(0,62mm)$)
-    {Ahmed \textbullet{} Naeem \textbullet{} Billah};
-  \node[rotate=-90,text=gold,font=\scriptsize\bfseries] at ($(current page.south)+(0,18mm)$)
-    {B.Sc.\ CSE \textbullet{} UIU \textbullet{} 2026};
+  \fill[board] (current page.south west) rectangle (current page.north east);
+  \node at ($(current page.north)+(0,-24mm)$) {\includegraphics[width=10mm]{\coverlogo}};
+  \node[rotate=-90,text=ink,font=\small\bfseries] at ($(current page.center)+(0,18mm)$)
+    {Beyond the Missing Wedge: Uncertainty-Quantified 3D Lung Nodule Assessment};
+  \node[rotate=-90,text=ink,font=\footnotesize\scshape] at ($(current page.south)+(0,62mm)$)
+    {\textls[60]{Ahmed {\fontshape{n}\selectfont\textbullet} Naeem {\fontshape{n}\selectfont\textbullet} Billah}};
+  \node[rotate=-90,text=ink,font=\footnotesize\bfseries] at ($(current page.south)+(0,20mm)$)
+    {\textls[100]{UIU {\fontshape{n}\selectfont\textbullet} 2026}};
 \end{tikzpicture}
 
 \end{document}
