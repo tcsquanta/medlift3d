@@ -3,9 +3,8 @@
 \documentclass[12pt,a4paper,oneside]{report}
 
 % ---------------------------------------------------------------- packages
-\usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern}
+% Computer Modern (CMR/CMBX/CMCSC), as in the UIU FYDP template
 \usepackage[margin=1in]{geometry}
 \usepackage{setspace}
 \usepackage{amsmath,amssymb,bm}
@@ -65,6 +64,7 @@
   \caption{#3}\label{#4}\end{figure}}
 
 % ---------------------------------------------------------------- page style (template: section left, chapter right)
+\setlength{\headheight}{14pt}
 \pagestyle{fancy}
 \fancyhf{}
 \renewcommand{\chaptermark}[1]{\markboth{Chapter \thechapter. #1}{}}
@@ -75,6 +75,21 @@
 \renewcommand{\headrulewidth}{0.4pt}
 \fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
 
+% Front-matter heading between two rules (template style: Abstract, Acknowledgements)
+\newcommand{\frontchapter}[1]{\clearpage\thispagestyle{plain}\markboth{#1}{#1}%
+  \noindent\rule{\linewidth}{0.6pt}\par\vspace{10pt}%
+  {\centering\LARGE\bfseries #1\par}\vspace{6pt}%
+  \noindent\rule{\linewidth}{0.6pt}\par\vspace{12pt}}
+\renewcommand{\contentsname}{Table of Contents}
+% running heads in title case, as in the template (report.cls upper-cases them)
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\tableofcontents}{\MakeUppercase}{}{}{}\patchcmd{\tableofcontents}{\MakeUppercase}{}{}{}
+\patchcmd{\listoffigures}{\MakeUppercase}{}{}{}\patchcmd{\listoffigures}{\MakeUppercase}{}{}{}
+\patchcmd{\listoftables}{\MakeUppercase}{}{}{}\patchcmd{\listoftables}{\MakeUppercase}{}{}{}
+\patchcmd{\thebibliography}{\MakeUppercase}{}{}{}\patchcmd{\thebibliography}{\MakeUppercase}{}{}{}
+\makeatother
+
 \hypersetup{pdftitle={MedLift-3D: Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis},pdfauthor={Jubair Ahmed, Foyez Ahammed Naeem, Md Motasim Billah}}
 
 \begin{document}
@@ -82,28 +97,37 @@
 % ---------------------------------------------------------------- title page
 \begin{titlepage}
 \centering
-\vspace*{1.2cm}
-{\LARGE\bfseries MedLift-3D\par}
-\vspace{0.4cm}
-{\Large\bfseries Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis\par}
+\rule{\linewidth}{0.6pt}\par
+\vspace{0.45cm}
+{\LARGE\bfseries Beyond the Missing Wedge: Calibrated 3D Lung Nodule Mass and Growth Assessment from Low-Dose Chest Tomosynthesis\par}
+\vspace{0.35cm}
+\rule{\linewidth}{0.6pt}\par
 \vspace{1.6cm}
-{\large By\par}
+By\par
 \vspace{1.2cm}
-{\large Jubair Ahmed (011222136)\\[2pt] Foyez Ahammed Naeem (011222011)\\[2pt] Md Motasim Billah (011222016)\par}
-\vspace{1.6cm}
+{\bfseries Jubair Ahmed (011222136)\\[4pt] Foyez Ahammed Naeem (011222011)\\[4pt] Md Motasim Billah (011222016)\par}
+\vspace{1.5cm}
 Submitted in partial fulfilment of the requirements\\ of the degree of Bachelor of Science in Computer Science and Engineering\par
-\vspace{1.4cm}
-{\large October 30, 2026\par}
-\vfill
-{\large Department of Computer Science and Engineering\\ United International University\par}
+\vspace{1.5cm}
+October 30, 2026\par
+\vspace{1.5cm}
+\includegraphics[width=2.2cm]{figures/uiu_logo.png}\par
+\vspace{0.4cm}
+{\scshape Department of Computer Science and Engineering\\ United International University\par}
 \end{titlepage}
 
 \pagenumbering{roman}
 \input{frontmatter/abstract}
 \input{frontmatter/acknowledgements}
 
+\cleardoublepage\phantomsection
+\addcontentsline{toc}{chapter}{Table of Contents}
 \tableofcontents
+\cleardoublepage\phantomsection
+\addcontentsline{toc}{chapter}{List of Figures}
 \listoffigures
+\cleardoublepage\phantomsection
+\addcontentsline{toc}{chapter}{List of Tables}
 \listoftables
 \cleardoublepage
 \pagenumbering{arabic}

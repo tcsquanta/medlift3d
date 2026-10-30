@@ -1,15 +1,15 @@
 \chapter{Standards and Design Constraints}
 \label{ch:standards}
 
-This chapter lists the standards MedLift-3D follows, with the alternatives considered, and analyses its economic, environmental, ethical, health and safety, social, political, legal, cultural and sustainability aspects. It ends with the cost analysis and the complex engineering problem mapping.
+This chapter describes the standards that MedLift-3D adheres to (along with the alternatives considered), and examines the economic, environmental, ethical, health and safety, social, political, legal, cultural, and sustainability issues. It concludes by the cost analysis and complex engineering problem mapping.
 
 \section{Compliance with the Standards}
 
-MedLift-3D is research software intended to become medical-device software, so we followed the standards that such software must eventually meet, even where formal certification is out of scope for a student project. For each standard we state how it is applied, which alternatives were considered with their pros and cons, and why it was selected. The standards are grouped into software, hardware and communication standards.
+MedLift-3D is research software to be developed as medical-device software, so we adhered to the standards which must be met by such software, although not formal certification for a student project. For every standard we explain how it is applied, the other options that were thought of with their pros and cons, and why the chosen one was selected. The Standards are divided into Software Standards, Hardware and Communication Standards.
 
 \subsection{Software Standards}
 
-The software standards cover data formats, the software life cycle, risk and quality management, code quality, numerical precision and licensing (\cref{tab:swstd}). DICOM is the format in which hospitals store and exchange images, so the input path reads DICOM directly and checks its geometry; intermediate data use compressed NumPy files with JSON headers because they hold each case's volume, masks and metadata in one self-describing file. IEC 62304 defines the life-cycle processes for medical device software; we are not certified, but we followed its core practices: every requirement is traced to a test, all code is under version control, 69 unit tests run automatically, and anomalies found during development are documented (\cref{ch:results}). ISO 14971 risk management is applied through the hazard analysis in \cref{tab:risk}, while ISO 13485 quality management is identified as necessary for a future product. IEEE 754 arithmetic is used deliberately: physics and measurement run in 32-bit precision and only the diffusion network uses bf16, which keeps the 32-bit range and avoids the overflow that fp16 causes in 3D networks. Finally, all data and libraries are used under open licences with attribution.
+The software standards are related to data formats, the software life cycle, risk and quality management, code quality and numerical precision and licensing (\cref{tab:swstd}). The input path reads DICOM directly, and checks its geometry, while intermediate data are stored as compressed NumPy files with a JSON header, which store the volume, masks and metadata of each case in one self-describing file, the format in which these are stored and exchanged in hospitals. We have not been certified to IEC 62304, but we did follow the core practices: each requirement was mapped to a test, all code is version controlled, 69 unit tests are run automatically and any anomaly discovered during software development has been documented (\cref{ch:results}) by implementation of the life cycle processes defined in IEC 62304. The hazard analysis in \cref{tab:risk} is used for the application of ISO 14971 risk management and ISO 13485 quality management is identified as required for a future product. This is intentional: physics, measurement is done in 32-bit precision; only diffusion network is done in bf16 to keep the 32-bit range, avoiding overflow of fp16 in 3D networks. Lastly, all data and libraries have open licence with attribution.
 
 \begin{table}[!htbp]
 \centering\small
@@ -71,40 +71,36 @@ DICOM networking, HL7 FHIR & Future integration with hospital PACS and records &
 
 \section{Design Constraints}
 
-The design was shaped by economic, environmental, ethical, health and safety, social, political, sustainability, legal and cultural constraints. Each is discussed below together with its effect on the design and the measures taken.
+Economics, environmental, ethical, health and safety, social, political, sustainability, legal and cultural restrictions influenced the design. Each will be discussed below in conjunction with design impact and action taken.
 
 \subsection{Economic Constraint}
 
-The project had no external funding, so all computation had to fit a student budget. Free resources were used wherever possible (laptop CPU, Kaggle GPUs for the pilot and the application), CPU-only steps (download and case building) were moved to a cheap CPU machine, and GPU training was given a fixed compute budget. Clinically, the economic case rests on DTS: a DTS-capable radiography room costs a fraction of a CT scanner and examines patients faster, so follow-up by DTS can lower the cost of each follow-up for hospitals and patients.
+There was no outside funding for the project, so all calculations had to be within a student budget. Wherever possible, free resources were used (laptop CPU, Kaggle GPUs for pilot and the application), CPU-only steps (download and case building) were delegated to a cheap CPU machine, and GPU training was allocated a fixed compute budget. This, in terms of clinical practice, boils down to economic factors: a DTS capable radiography room is significantly less expensive than a CT scanner, and can examine patients much faster, meaning that follow-up with DTS can reduce the cost of follow-up for both hospitals and patients.
 
 \subsection{Environmental Constraint}
 
-\paragraph{Energy and emissions.} The L40S GPU has a 350~W power limit, and the whole study ran on this single GPU, so its energy use and emissions (at a grid intensity of about 0.48~kg CO$_2$ per kWh worldwide and about 0.6 in Bangladesh) were small. One measurement (about 45~s on the GPU) uses about 0.004~kWh. These are estimates from rated power, following~\cite{lannelongue2021green}, not metered values.
+\paragraph{Energy and emissions.} The energy consumption of the L40S GPU was minimal, as was the emissions (assuming the per kWh emissions in the grid are approximately 0.48 kg CO$_2$ globally and approximately 0.6 in Bangladesh), for the entire study was conducted on a single GPU. About 0.004 kWh is consumed for 1 measurement (approx. 45 seconds on the GPU). These are the estimates based on rated power as per~\cite{lannelongue2021green} and not metered values.
 
-\paragraph{Data storage and waste.} The 64~GB of downloaded DICOM was deleted after conversion to compact cases, and intermediate files that can be regenerated were not backed up. No hardware was bought, so the project produced no electronic waste.
+\paragraph{Data storage and waste.} Downloaded data (64 GB of DICOM) was deleted after being converted to compact cases and intermediate files which could be regenerated were not backed up. No electronic waste was generated as no hardware was purchased.
 
-\paragraph{Radiation as an environmental factor.} Replacing CT follow-ups (about 1.5--6~mSv) with DTS (about 0.1~mSv) reduces the population's collective radiation dose.
+\paragraph{Radiation as an environmental factor.} This will decrease the collective dose of radiation for the population because CT follow-up (1.5-6 mSv) is replaced by DTS (0.1 mSv).
 
 \paragraph{Mitigations.} A small model (17.4~M parameters) instead of a large generator; a prism instead of whole-volume generation; fixed compute budgets; CPU work on CPU machines; trained models reused for evaluation and the application instead of retraining; and, for future runs, cloud regions powered by renewable energy.
 
 \subsection{Ethical Constraint}
 
-\paragraph{Professional ethics.} We followed the IEEE~\cite{ieeeethics} and ACM~\cite{acmethics} codes of ethics, in particular honesty about claims and results.
+\paragraph{Professional ethics.} We adhered to IEEE~\cite{ieeeethics} and ACM~\cite{acmethics} codes of ethics including honesty in claiming and results.
 \begin{itemize}
-  \item \textbf{Honest claims:} all results come from \emph{simulated} DTS, not real scanners, and \cref{sec:gap} lists what we do not claim.
-  \item \textbf{Honest results:} hypotheses were stated before the results, and the report gives whichever outcome we found, including that H1 and H2 were not supported, that the intervals were too wide to be useful, that the detector sensitivity is only 35\% at two false positives per scan, and the failed checks in \cref{ch:results}.
-  \item \textbf{Credit:} all datasets, libraries and ideas we build on are cited, including the data citations required by TCIA.
-  \item \textbf{Fairness:} LIDC-IDRI comes mainly from US patients; performance on other populations, for example patients with healed tuberculosis scars, is unknown and is stated as such.
-  \item \textbf{Data ethics:} only de-identified public data, used under its licence, with no attempt at re-identification.
+  \item \textbf{Honest claims:} all results are obtained from \emph{simulated} DTS, not actual scanners, and \cref{sec:gap} provides a list of the things we don't claim.\item \textbf{Honest results:} hypotheses were given prior to results; and the results in the report were whatever we stumbled upon such as: H1 and H2 were not supported; intervals were so wide as to be useless; detector sensitivity is only 35\% at 2 false positives per scan; failed checks in \cref{ch:results}.\item \textbf{Credit:} all datasets, libraries and ideas we build on are cited, including the data citations mandated by TCIA.\item \textbf{Fairness:} LIDC-IDRI is primarily derived from patients in the United States, and performance has not been determined on other patient populations such as patients with healed tuberculosis scars and is not claimed for such populations.\item \textbf{Data ethics:} Public data used under its licence, no re-identification attempt, Only de-identified data.
 \end{itemize}
 
-\paragraph{Professional responsibility.} The team owns its decisions and mistakes. When the real-data pilot showed that the prism lost a third of its attenuation, we traced the cause to our own missing depth support and fixed it before the full run; when the first design of the project could not be verified, we narrowed it rather than present training losses as success. Each step's owner (\cref{tab:tasks}) is accountable for its checks. The system is decision support: the responsibility for a diagnosis stays with the radiologist.
+\paragraph{Professional responsibility.} The team takes responsibility for their choices, and their errors. That we lost a third of the attenuation on the prism in the real data pilot, we found out and corrected ourselves on the lack of depth support in our design on the project before the full run, else we'd have been claiming training losses as successes. The owner of each step (\cref{tab:tasks}) is responsible for the checks for that step. The system is decision support -- diagnosis remains the responsibility of the radiologist.
 
 \subsection{Health and Safety Constraint}
 
-\paragraph{Health impacts.} \emph{Physical:} the main benefit is lower radiation per follow-up (DTS about 0.1~mSv vs about 1.5~mSv for low-dose CT or several mSv for diagnostic CT), which matters because nodule follow-up repeats over years~\cite{rampinelli2017,mascalchi2017}. The main physical risk is a wrong measurement that delays treatment of a growing cancer or leads to an unnecessary biopsy. \emph{Mental:} living with an indeterminate nodule causes anxiety, and a falsely reassuring or falsely alarming number makes it worse.
+\paragraph{Health impacts.} \emph{Physical:} Lower radiation for each follow-up (DTS $\sim$0.1 mSv, vs $\sim$1.5 mSv for low dose CT or several mSv for diagnostic CT) is important given nodule follow-up is repeated over many years~\cite{rampinelli2017,mascalchi2017}. The most significant physical risk is mismeasurement, which can cause a cancer to grow and not be treated or can cause an unnecessary biopsy. \emph{Mental:} having an indeterminate nodule is stressful, and a reassuring or alarming number aggravates it.
 
-\paragraph{Actionable solutions.} Every number is reported with a calibrated interval and category probabilities so that the clinician sees when a result is uncertain; a low-confidence flag recommends CT; and results should be explained to patients by the clinician in categories rather than raw numbers. \Cref{tab:risk} lists the main hazards.
+\paragraph{Actionable solutions.} Each number is displayed with a calibrated interval and category probabilities to inform the clinician when a result is uncertain; a flag for low confidence triggers the clinician to consider CT and the results should be explained to the patient as categories instead of numbers. The principle hazards are listed in \cref{tab:risk}.
 
 \begin{table}[!htbp]
 \centering\small
@@ -114,7 +110,7 @@ The project had no external funding, so all computation had to fit a student bud
 \toprule
 Hazard & Cause & Effect & Mitigation \\
 \midrule
-Underestimated growth & Prior fills depth wrongly & Delayed treatment & Mass-first reporting; intervals; seen/unseen explanation; CT recommended when flagged \\
+Under\-estimated growth & Prior fills depth wrongly & Delayed treatment & Mass-first reporting; intervals; seen/unseen explanation; CT recommended when flagged \\
 Overestimated growth & Vessel or chest wall included & Unnecessary CT or biopsy & Segmentation confined to a plausible extent; leaks reported as not measurable \\
 Hallucinated nodule & Prior invents structure & False alarm & Data consistency with X-rays; clinician confirms \\
 Missed nodule & Detector sensitivity 35\% at 2 FP/scan & Nodule not suggested & Clinician can click anywhere; detector is an aid \\
@@ -126,41 +122,35 @@ Over-trust & Automation bias & Clinician stops checking & Intervals and flags sh
 
 \subsection{Social Constraint}
 
-In the short term, DTS-based follow-up could shorten CT waiting lists and reduce travel for patients outside major cities. In the long term it could make nodule surveillance, and later screening, feasible where CT capacity is the bottleneck, improving early diagnosis where the survival gain is largest. From the patient's perspective this means less dose and cost; from the radiologist's, a measurement tool with honest uncertainty; from the health system's, cheaper follow-up that needs training and local validation. Possible negative effects are over-diagnosis if many more people are followed, and a widening gap if only private hospitals adopt the tool; both argue for public-sector deployment and guideline-based use.
+Short term, DTS-based follow-up would help to decrease CT waiting lists and patient travel outside of larger cities. It could enable nodule surveillance and ultimately screening in the longer term wherever CT resource availability is the limiting factor and the most survival benefit is achieved through early diagnosis. This translates to less dose, less cost for the patient, a measurement tool with honest uncertainty for the radiologist and local validation and training, and less cost for the health system for follow-up. Two potential adverse effects are the overusing of the tool, where many more people are followed, and the potential for a divide to develop between those who use the tool in public hospitals and those who don't, which is making their own guidelines; both suggest a need for public-sector implementation and adherence to guidelines.
 
 \subsection{Political Constraint}
 
-Adoption of health technology depends on public health policy and procurement. In Bangladesh, imaging equipment and software are purchased mainly through government tenders and large private hospital groups, so adoption would need evidence accepted by the health authorities and inclusion in national cancer-control plans. The use of foreign cloud computing for health data is itself a policy question, so a deployment should keep data and computation in the country.
+Public health policy and procurement are key enablers for health technology adoption. In Bangladesh, imaging equipment and software is mostly bought via the government tender process and large private hospital conglomerates, so the adoption of such equipment would require proof to be accepted by health authorities and incorporation into national cancer-control plans. The deployment of foreign cloud computing for health data is also a policy issue -- data and computation should remain in the country.
 
 \subsection{Sustainability}
 
-\paragraph{Lifecycle plan.} (1) Development and verification (this project); (2) retrospective validation on real DTS with CT ground truth from a partner hospital; (3) a prospective reader study; (4) regulatory registration; (5) deployment with monitoring of measurement errors and interval coverage; and (6) periodic recalibration of the conformal layer, which needs only new calibration cases, not retraining, when scanners or populations change.
+\paragraph{Lifecycle plan.} The various steps are: (1) development and verification (this project); (2) retrospective validation on real DTS with CT ground truth from a partner hospital; (3) a prospective reader study; (4) regulatory registration; (5) deployment with monitoring of measurement errors and interval coverage; and (6) periodic recalibration of the conformal layer, which only requires new calibration cases, not retraining, when scanners or populations change.
 
-\paragraph{Three dimensions.} \emph{Environmental:} small model, low energy per measurement, no special hardware. \emph{Economic:} runs on one mid-range GPU or a low-cost cloud instance, and open-source code avoids licence fees. \emph{Social:} documented and tested code that another team can maintain, and a method that extends to other limited-angle modalities.
+\paragraph{Three dimensions.} \emph{Environmental:} small model, low per measurement energy, no special hardware. \emph{Economic:} uses one mid-range GPU or low cost cloud instance and is open-source software, no licence fees to be paid. \emph{Social:} demonstrated and validated code for other team to maintain and process that can be extended to other limited angle modalities.
 
 \subsection{Legal Considerations}
 
 \begin{itemize}
   \item \textbf{Data licence:} LIDC-IDRI is distributed by TCIA under the Creative Commons Attribution 3.0 Unported licence, which allows commercial, scientific and educational use with attribution. The TCIA data usage policy forbids any attempt to identify or contact the participants and requires every publication to cite both the collection~\cite{armato2011lidc} and the TCIA repository~\cite{clark2013tcia}~\cite{tcia_policy}. We follow both requirements and made no attempt at re-identification.
   \item \textbf{Medical device regulation in Bangladesh:} medical devices are regulated by the Directorate General of Drug Administration (DGDA). The Drugs and Cosmetics Act 2023~\cite{bddca2023}, passed by Parliament in September 2023, replaced the Drugs Act 1940 and the Drugs (Control) Ordinance 1982 and includes provisions on medical devices. Registration follows the DGDA Registration Guidelines for Medical Devices~\cite{dgda2015}, which are based on the Global Harmonization Task Force guidance and define a medical device to include software intended for diagnosis or monitoring. A clinical version of MedLift-3D would therefore be a registrable medical device; implementing rules under the 2023 Act are still being developed, so the current DGDA requirements must be confirmed at the time of submission.
-  \item \textbf{Other markets:} the US FDA (510(k) or De Novo), the EU Medical Device Regulation~\cite{eumdr} and the EU AI Act~\cite{euaiact}, which classes medical AI as high risk, would apply; each requires risk management~\cite{iso14971}, life-cycle processes~\cite{iec62304} and clinical evidence.
-  \item \textbf{Data protection:} Bangladesh's Personal Data Protection Ordinance 2025~\cite{bdpdpo2025}, approved on 9 October 2025 and published in the official gazette on 6 November 2025, recognises citizens as the owners of their personal data, makes explicit consent mandatory before personal data is collected, stored, transferred or used, treats health records as sensitive data with stricter rules and penalties, and restricts cross-border transfers; some provisions take effect 18 months after publication. A clinical deployment would have to obtain consent, keep health data within these rules (and GDPR or HIPAA for international data), and preferably compute inside the country. The demonstration uses only de-identified public data.
-  \item \textbf{Liability:} the intended use is decision support; the clinician remains responsible for the diagnosis.
+  \item \textbf{Other markets:} US FDA (510(k) or De Novo), EU Medical Device Regulation~\cite{eumdr} and EU AI Act~\cite{euaiact} (high risk medical AI) would apply, all of which entail risk management~\cite{iso14971}, life-cycle processes~\cite{iec62304} and clinical evidence.\item \textbf{Data protection:} The Personal Data Protection Ordinance 2025~\cite{bdpdpo2025} approved on 9 October 2025 and published in the official gazette on 6 November 2025 provides for citizens as owners of their personal data, specific consent is a requirement for collecting, storing, transferring, or using personal data, health data is classified as sensitive and subject to stricter rules and penalties, and cross-border transfers are restricted; some provisions will come into effect 18 months after publication. For a clinical deployment, you'd need to get consent, comply with these regulations (and GDPR/HIPAA for data collected outside of the country) and ideally compute within the country. Only public data, which has been de-identified, is used in the demonstration.\item \textbf{Liability:} intended for decision support, diagnosis is the responsibility of the clinician.
 \end{itemize}
 
 \subsection{Cultural Considerations}
 
 \begin{itemize}
-  \item \textbf{Language and literacy:} a deployed interface should offer Bangla and present results in plain categories, with numbers available for specialists.
-  \item \textbf{Family-centred decisions:} diagnoses are often discussed with the family, so uncertainty should be explained through the clinician in a way the family can follow, not as raw probabilities.
-  \item \textbf{Stigma:} lung cancer is often linked to smoking and blame; communication should avoid blame, and many patients, especially women exposed to cooking smoke, have never smoked.
-  \item \textbf{Local disease patterns:} healed tuberculosis leaves calcified granulomas that resemble nodules. The model was not trained on such patients, so local validation is required before use, which also respects patients' right to a tool tested on people like them.
-  \item \textbf{Trust:} many patients trust the doctor more than a machine; keeping the clinician in charge respects this.
+  \item \textbf{Language and literacy:} an interface to be deployed should support Bangla and output results in lay categories, numbers to be made available to specialists.\item \textbf{Family-centred decisions:} Diagnoses are often made with the family, so if there is any uncertainty this should be explained by the clinician not in the form of raw probabilities, but in a way the family can follow.\item \textbf{Stigma:} Lung cancer is associated with smoking and blame -- do not blame and many patients, particularly women, have never smoked and are exposed to cooking smoke.\item \textbf{Local disease patterns:} Healed tuberculosis leaves behind calcified granulomas which look like nodules. Such patients were not included in the training of the model, and therefore, local validation is necessary before using the model, in accordance with the patients' right to a model that is tested on patients similar to themselves.\item \textbf{Trust:} many of the patients trust the doctor more than the machine and it is only fair to keep the clinician in charge.
 \end{itemize}
 
 \section{Cost Analysis}
 
-\paragraph{Revenue model (illustrative).} For a commercial version, assume 18 months of validation and registration and customers among diagnostic centres and hospitals with DTS-capable radiography (\cref{tab:revenue,tab:cashflow}).
+\paragraph{Revenue model (illustrative).} Assume 18 months for the commercial version of validation and registration and target customers to be diagnostic centres and hospitals that have DTS-capable radiography (\cref{tab:revenue,tab:cashflow}).
 
 \begin{table}[!htbp]
 \centering\small
@@ -226,7 +216,7 @@ MedLift-3D is a complex engineering problem: it is ill-posed by physics, combine
 \end{adjustbox}
 \end{table}
 
-\paragraph{P1 -- Depth of knowledge.} The solution requires X-ray projection physics, linear algebra of range and null spaces, probabilistic diffusion models, conformal statistics and 3D deep learning, beyond the standard curriculum. \Cref{tab:wk} maps the knowledge profiles.
+\paragraph{P1 -- Depth of knowledge.} What is needed extra to the standard curriculum is X-ray projection physics, linear algebra of range and null spaces, probabilistic diffusion models, conformal statistics and 3D deep learning. The knowledge profiles are shown in \cref{tab:wk}.
 
 \begin{table}[!htbp]
 \centering\small
@@ -248,17 +238,17 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 \end{tabularx}
 \end{table}
 
-\paragraph{P2 -- Range of conflicting requirements.} Dose vs accuracy, filling the missing wedge vs never inventing anatomy, single numbers vs honest intervals, memory vs field of view, and detection recall vs false positives (\cref{tab:conflicts}).
+\paragraph{P2 -- Range of conflicting requirements.} The dose vs accuracy, the filling of the missing wedge vs no anatomical invention, the single numbers vs honest intervals, the memory vs the field of view, and the detection recall vs false positives (\cref{tab:conflicts}).
 
-\paragraph{P3 -- Depth of analysis.} We derived from first principles which quantities DTS can measure, built a 583-patient virtual trial, and analysed calibration, size-group coverage and seen/unseen content rather than image quality alone.
+\paragraph{P3 -- Depth of analysis.} We started from the ground up to identify what DTS can measure, created a virtual 583 patient trial and looked at calibration, size group coverage and seen/unseen content not just image quality.
 
-\paragraph{P4 -- Familiarity of issues.} No standard solution exists for calibrated 3D nodule measurement from DTS; the combination of a data-consistent prior inside a DTS prism, Gaussian mass and conformal calibration had to be designed for this problem.
+\paragraph{P4 -- Familiarity of issues.} For the calibrated 3D nodule measurement in DTS, no standard solution exists and already the combination of a data-consistent prior in a DTS-prism, Gaussian mass and conformal calibration had to be designed.
 
-\paragraph{P5 -- Extent of applicable codes.} DICOM, IEC 62304, ISO 14971, data licences and medical device regulation (\cref{tab:swstd}).
+\paragraph{P5 -- Extent of applicable codes.} DICOM, IEC 62304, ISO 14971, data licences and medical device regulation (\cref{tab:swstd})
 
-\paragraph{P6 -- Extent of stakeholder involvement (partial).} Clinical needs were taken from guidelines and supervisor feedback; direct evaluation by radiologists is future work.
+\paragraph{P6 -- Extent of stakeholder involvement (partial).} Clinical needs were based on guidelines and feedback from supervisor; future work will include direct evaluation by the radiologists.
 
-\paragraph{P7 -- Interdependence.} Simulation, reconstruction, prior, Gaussians, calibration and detector depend on each other: the depth-support bug in reconstruction, for example, corrupted the training data and every downstream measurement until it was fixed.
+\paragraph{P7 -- Interdependence.} There is a lot of interdependence between simulation, reconstruction, prior, Gaussians, calibration, and detector: for instance, until now the depth-support bug in reconstruction screwed up the training data, and consequently all subsequent measurements, including calibration and detector.
 
 \subsection{Engineering Activities}
 
@@ -277,15 +267,15 @@ WK8 Research literature & Literature on DTS, sparse-view CT, diffusion, Gaussian
 \end{adjustbox}
 \end{table}
 
-\paragraph{A1 -- Range of resources.} A public archive of 583 patients (about 64~GB), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries.
+\paragraph{A1 -- Range of resources.} There was a public collection of 583 patients ($\approx$64 Gb), rented CPU and GPU machines with shared storage, free Kaggle GPUs and open-source libraries.
 
-\paragraph{A2 -- Level of interaction.} Interaction among three team members with distinct roles, the supervisor, the course teacher, published clinical guidelines and open-source communities (crepes, Gradio, pylidc).
+\paragraph{A2 -- Level of interaction.} Three persons in the team (with different roles), the supervisor, and the course teacher, published clinical guidelines, and open-source communities (crepes, Gradio, pylidc) interact.
 
-\paragraph{A3 -- Innovation.} The mass-first projection-moment argument for DTS, the prism-based data-consistent diffusion prior with Gaussian mass, decision-level calibrated uncertainty, and a truth-referenced seen/unseen test.
+\paragraph{A3 -- Innovation.} The mass-first projection-moment argument for DTS, the prism-based data-consistent diffusion prior, decision-level calibrated uncertainty and a seen/unseen test with respect to the truth.
 
-\paragraph{A4 -- Consequences for society and environment.} Lower radiation and cost per follow-up and wider access to nodule surveillance, balanced against the risk of wrong measurements, which intervals, flags and clinician control address (\cref{tab:risk}).
+\paragraph{A4 -- Consequences for society and environment.} The intervals, flags and clinician control all address the potential for incorrect measurements, while providing lower radiation and cost per follow-up and greater access to nodule surveillance (\cref{tab:risk}).
 
-\paragraph{A5 -- Familiarity.} Diffusion models, conformal predictive systems and null-space analysis go well beyond typical undergraduate projects and were learned during the project.
+\paragraph{A5 -- Familiarity.} During the project, diffusion models, conformal predictive systems and null-space analysis were learned, which are much more than typical undergraduate projects.
 
 \section{Summary}
 

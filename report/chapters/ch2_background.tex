@@ -1,11 +1,11 @@
 \chapter{Background}
 \label{ch:background}
 
-This chapter gives the background needed for the rest of the report and reviews existing applications and research. It ends with the gap that MedLift-3D addresses.
+This chapter gives the background needed for the rest of the report and reviews existing applications and research. It concludes in the gap that MedLift-3D fills.
 
 \section{Preliminaries}
 
-This section introduces the physics of X-ray projection and tomosynthesis, iterative reconstruction and its null space, diffusion models, Gaussian representations and nodule mass, conformal prediction, and the explainability and detection metrics used in the rest of the report.
+This section presents the physics of X-ray projection and tomosynthesis, iterative reconstruction and null space, diffusion models, Gaussian representations and nodule mass, conformal prediction, and explainability and detection measures which are used throughout the remainder of the report.
 
 \subsection{X-ray Projection and Digital Tomosynthesis}
  A detector pixel records the line integral of the linear attenuation coefficient $\mu$ along the ray from the source. With $I_0$ incident photons the expected count is
@@ -74,7 +74,7 @@ The review has two parts: applications that already address parts of the problem
 
 \subsection{Similar Applications}
 
-Clinical practice already offers tools for parts of the problem, but none measures nodules in 3D from DTS. Chest DTS units from GE and Shimadzu produce coronal slices that radiologists read visually, and nodule size is judged by eye or by a diameter on a single slice. CT nodule software, from scanner vendors and AI companies, segments nodules and reports volume and doubling time, but only on CT. Detection systems such as those compared in the LUNA16 challenge suggest nodule locations without measuring them. General tools such as 3D Slicer and ITK-SNAP allow manual segmentation without any learned prior or uncertainty, and research codes for sparse-view reconstruction produce whole volumes for CT geometry and report image quality only. \Cref{tab:similar} summarises these applications and what each lacks for our problem.
+Parts of the problem are already available in clinical practice, but the tools available do not measure nodules in 3D from DTS. The GE and Shimadzu chest DTS units generate coronal slices which radiologists read visually, and nodule size is either estimated visually or a diameter is provided in a single slice. CT nodule software, offered by scanner vendors and AI companies, segments nodules and report volumes and doubling time -- but only on CT. Detection systems like the ones compared in the LUNA16 challenge predict the locations of nodules but do not measure them. Manual segmentation is possible with general tools, like 3D Slicer, ITK-SNAP, etc., which do not carry out any learnt prior or uncertainty, while the research codes for sparse-view reconstruction generate the whole volumes for CT geometry and report only the image quality. These applications are summarised in \cref{tab:similar} and each has a drawback for our problem.
 
 \begin{table}[!htbp]
 \centering\small

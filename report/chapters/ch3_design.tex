@@ -95,7 +95,7 @@ NFR-08 Privacy & No identifiable patient data & Only de-identified public TCIA d
 
 \subsection{Context Diagram}
 
-The context diagram (\cref{fig:context}) shows MedLift-3D as a single process with its external entities. At run time the clinician is the only actor: they send a case, a click and a depth, and receive the measurement report. The TCIA archive supplies CT scans with the radiologists' annotations, and the cloud GPU provider runs the training and evaluation jobs and returns the trained models and results; both are needed to build and evaluate the system, not to use it.
+The context diagram (\cref{fig:context}) depicts MedLift-3D as a single process with its external entities. The clinician is the only actor during run time: they send a case, a click and a depth and they receive the measurement report. The TCIA archive provides CT scans with the annotations from the radiologists and the cloud GPU provider performs the training and evaluation jobs and returns trained models and result, which are necessary only to build and evaluate the system, but not to use it.
 
 \begin{figure}[htbp]
   \centering
@@ -106,7 +106,7 @@ The context diagram (\cref{fig:context}) shows MedLift-3D as a single process wi
 
 \subsection{Data Flow Diagram Level 1}
 
-The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and four data stores. The upper row runs once to build the cases, train the models and calibrate them; the lower row runs for every click and reads all four stores. \Cref{sec:method} gives the functional decomposition, the entity-relationship model and the data dictionary.
+The level-1 DFD (\cref{fig:dfd1}) breaks down the system into eight processes and four data stores. The top row is run once for building the cases, training the models and calibrating, the second row is run every click and reads all four stores. The functional decomposition, entity-relationship model and the data dictionary are provided in \cref{sec:method}.
 
 \begin{figure}[htbp]
   \centering
@@ -121,7 +121,7 @@ The level-1 DFD (\cref{fig:dfd1}) decomposes the system into eight processes and
 
 \subsection{UI Design}
 
-The interface is a browser application built around one action: click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice with detector suggestions, annotated nodules (for evaluation) and the click; (3) the depth slider, which supplies the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up that reports VDT and MDT.
+The interface is a web-based application that is based on a single action, which is to click on the nodule (\cref{fig:ui}). The numbered parts are: (1) case and method selection; (2) the coronal DTS slice, with detector suggestions, annotated nodules (for evaluation) and with the click; (3) the depth slider, which provides the third coordinate; (4) the measurement report with mass and volume intervals, the EUPS category probabilities and the low-confidence flag; (5) a 3D view of the nodule and the prism input with its eight samples; and (6) a virtual follow-up with VDT and MDT.
 
 \begin{figure}[htbp]
   \centering

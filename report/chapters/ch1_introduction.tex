@@ -22,10 +22,10 @@ Digital chest tomosynthesis (DTS) acquires 15--74 low-dose X-ray views during a 
 
 \section{Motivation}
 
-Four observations motivate this project: nodules must be followed over time, 2D measurement of their size is unreliable, CT follow-up costs radiation and access, and existing reconstruction methods cannot give trustworthy numbers from DTS. A fifth, computational observation shapes the approach we take.
+This project is motivated by four observations: nodules need to be followed over time, the size of nodules is uncertain when measured in 2D, follow-up using CT is costly because of radiation, access, and existing reconstruction methods are not able to produce trustworthy numbers from DTS. Our approach is guided by a 5th observation, computational observation.
 
 \subsection{Clinical Importance of Nodule Follow-up}
- Five-year survival falls from 64\% for localised lung cancer to 9\% for distant disease~\cite{who2023lung,nlst2011}. Growth is the key sign separating malignant from benign nodules, and guidelines act on volume and doubling-time categories: $<100$, 100--300 and $\geq 300$~mm$^3$, and $<400$, 400--600 and $>600$ days~\cite{oudkerk2017eups,horeweg2014nelson}.
+The 5-year survival rates are 64\% for localised lung cancer, and 9\% for distant disease~\cite{who2023lung,nlst2011}. The only distinguishing feature between malignant and benign nodules is growth and the guidelines are based on ranges of volume and doubling times: $<100$, 100--300 and $\geq$300 mm$^3$; $<400$, 400--600 and $>600$ days~\cite{horeweg2014nelson,oudkerk2017eups}.
 
 \subsection{Limits of 2D Measurement}
  Diameters measured on single slices assume a sphere. Volumes estimated from 2D measurements differ from 3D volumetry by 47--85\% on average~\cite{demargerie2018}, 2D measurements of small nodules are unreliable~\cite{revel2004twod}, and a 1~mm change in diameter is a 33\% change in volume~\cite{lee2025volumetry}. Measurement error larger than the true growth delays treatment.
@@ -34,10 +34,10 @@ Four observations motivate this project: nodules must be followed over time, 2D 
  CT follow-up means repeated dose and requires well-equipped centres~\cite{mascalchi2017,brenner2007ct}. In Bangladesh, CT scanners are concentrated in divisional cities and large hospitals, so many patients travel long distances and pay for every follow-up scan, while digital radiography rooms, which can be upgraded to tomosynthesis, are far more widespread. DTS is cheaper, faster and much lower in dose than CT, but today it offers no trustworthy 3D measurement, so a nodule found on DTS is still sent to CT for every follow-up.
 
 \subsection{Why Existing Reconstruction and AI Are Not Enough}
- Iterative reconstruction from a \ang{30} sweep smears each nodule 3--5 times longer in depth than in-plane (we measured a median ratio of 3.5 on LIDC nodules). Generative models can fill the missing wedge, but a model that invents anatomy is dangerous for cancer follow-up~\cite{bhadra2021,zhang2025pail}. Published sparse-view methods report image quality (PSNR, SSIM) rather than calibrated clinical numbers, and none is built for DTS geometry.
+Iterative reconstruction from a \ang{30} sweep results in 3--5 times nodule extension along the depth axis in comparison to in-plane (the median was 3.5 in our measurements of LIDC nodules). The missing wedge is generative models, but a cancer-following model that creates anatomy is hazardous~\cite{bhadra2021,zhang2025pail}. Sparse view methods have been published with image quality (PSNR,SSIM) values not calibrated clinical numbers and none is developed for DTS geometry.
 
 \subsection{Computational Motivation}
- We asked what DTS can \emph{measure}, not only what it can show. A derivation from projection moments (\cref{sec:method}) shows that every DTS view measures a nodule's total excess attenuation, its \emph{mass}, exactly, while its depth extent, which volume needs, is about 15 times worse conditioned for a $\pm15^\circ$ sweep. A system for DTS should therefore report mass first, fill depth with a learned prior that stays consistent with the X-rays, and state how uncertain each number is. Mass growth is already an established CT biomarker that detects growth earlier than volume~\cite{dehoop2010}.
+Not only what it can show, but we asked what DTS can \emph{measure}. By derivation of projection moments (\cref{sec:method}) it is shown that every DTS view measures the total excess attenuation of a nodule exactly, its depth extent, which volume needs, is about 15 times worse conditioned for a $\pm15^\circ$ sweep. A system for DTS should therefore start with a statement of \emph{mass}, then a fill depth with a learned prior that is consistent with the X-rays, and a statement of uncertainty for each of the numbers. The use of mass growth as a CT biomarker is already proven to detect growth earlier than volume~\cite{dehoop2010}.
 
 \section{Objectives}
 
@@ -67,10 +67,10 @@ MedLift-3D is evaluated as a virtual clinical trial on real patient CT, because 
 
 \section{Project Outcome}
 
-The project produces outcomes at three levels: a working and verified technical system, a tool that a clinician can use, and research contributions that can be published.
+The project generates the following three sets of outputs: a technical system that is shown to operate; a system usable by a clinician; and a research contribution.
 
 \subsection{Technical Outcome}
- A verified, open pipeline of 18 scripted steps, each ending in automatic PASS/FAIL checks, from data download to final tables, figures and an HTML report. It contains a differentiable DTS simulator and projector, whole-chest and prism reconstruction, a trained conditional diffusion prior and nodule detector, Gaussian measurement, conformal calibration and an explainability module, covered by 69 unit tests and documented for rented cloud GPUs and free Kaggle notebooks.
+An automated, step-by-step, scripted process from data download to final tables, figures and HTML report, which has been verified and passed. It includes a differentiatable DTS simulator and projector, whole-chest and prism reconstruction, a trained conditional diffusion prior and nodule detector, Gaussian measurement, conformal calibration and an explainability module, with 69 unit tests documented and with free use of cloud GPUs via a rental service and free use of Kaggle notebooks.
 
 \subsection{Clinical Outcome}
  A click-to-3D application that returns, in under a minute, the nodule's mass, volume, long-axis diameter and EUPS size category with calibrated probabilities, together with a virtual follow-up for growth. Every number comes with an interval instead of a single value, and a low-confidence flag tells the clinician when the DTS evidence is too weak and a CT is advisable. The tool is meant for following known nodules, the step that today requires repeated CT.
@@ -80,4 +80,4 @@ The project produces outcomes at three levels: a working and verified technical 
 
 \section{Organization of the Report}
 
-\Cref{ch:background} gives the background on DTS, diffusion models, 3D Gaussians, conformal prediction and explainability, reviews similar applications and research, and identifies the gap. \Cref{ch:design} presents the requirements, the context and data flow diagrams, the user interface, the detailed method with the alternatives considered, the project plan and the task allocation. \Cref{ch:results} describes the environment and tools, how each requirement was verified, and the results for H1--H6. \Cref{ch:standards} covers standards; societal, health, safety, legal, cultural, ethical, environmental and sustainability considerations; cost; and the complex engineering problem mapping. \Cref{ch:conclusion} summarises the work, its limitations, future work and what we learned.
+\Cref{ch:background} provides the background of DTS, diffusion models, 3D Gaussians, conformal prediction and explainability, discusses related applications and research, and identifies the gap. The requirements, context and data flow diagrams, user interface, detailed method, including alternatives examined, project plan and task allocation are presented in \cref{ch:design}. This is described in \cref{ch:results} where the environment and tools are described as well as how each requirement was verified and the results of H1-H6. \Cref{ch:standards} discusses standards, issues related to society, health and safety, law, culture, ethics, environment and sustainability, costs and the complex engineering problem mapping. In \cref{ch:conclusion} the work is summarised, limitations are pointed out, future work is suggested and what has been learnt is summarised.
